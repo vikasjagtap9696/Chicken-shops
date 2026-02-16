@@ -57,7 +57,7 @@ class _BillingScreenState extends State<BillingScreen> {
       ),
       body: Column(
         children: [
-          _buildTopSearchSection(db),
+          _buildTopSearchSection(db, auth),
           Expanded(
             child: _buildProductGrid(db),
           ),
@@ -67,7 +67,7 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
-  Widget _buildTopSearchSection(DatabaseService db) {
+  Widget _buildTopSearchSection(DatabaseService db, AuthService auth) {
     final query = _customerSearchController.text.toLowerCase();
     final results = db.customers.where((c) => 
       c.name.toLowerCase().contains(query) || 
@@ -82,19 +82,33 @@ class _BillingScreenState extends State<BillingScreen> {
       ),
       child: Column(
         children: [
-          TextField(
-            controller: _customerSearchController,
-            onChanged: (val) => setState(() => _showCustomerResults = val.isNotEmpty),
-            style: TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Search Customer...',
-              hintStyle: TextStyle(color: Colors.white70),
-              prefixIcon: Icon(Icons.person_search, color: Colors.white70),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.2),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-              contentPadding: EdgeInsets.zero,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customerSearchController,
+                  onChanged: (val) => setState(() => _showCustomerResults = val.isNotEmpty),
+                  style: TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Search Customer...',
+                    hintStyle: TextStyle(color: Colors.white70),
+                    prefixIcon: Icon(Icons.person_search, color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.2),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              SizedBox(width: 10),
+              CircleAvatar(
+                backgroundColor: Colors.white.withOpacity(0.2),
+                child: IconButton(
+                  icon: Icon(Icons.person_add, color: Colors.white),
+                  onPressed: () => _showAddCustomerDialog(context, auth, db),
+                ),
+              ),
+            ],
           ),
           if (_showCustomerResults && selectedCustomer == null)
             _buildCustomerSearchResults(results),
@@ -119,10 +133,53 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
+  void _showAddCustomerDialog(BuildContext context, AuthService auth, DatabaseService db) {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add New Customer'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameController, decoration: InputDecoration(labelText: 'Name')),
+            TextField(controller: phoneController, decoration: InputDecoration(labelText: 'Phone'), keyboardType: TextInputType.phone),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.isNotEmpty && phoneController.text.isNotEmpty) {
+                final newCustomer = CustomerModel(
+                  id: '',
+                  name: nameController.text,
+                  phone: phoneController.text,
+                  createdAt: DateTime.now(),
+                );
+                bool success = await db.addCustomer(newCustomer, auth);
+                if (success) {
+                  setState(() {
+                    selectedCustomer = newCustomer;
+                    _customerSearchController.text = newCustomer.name;
+                  });
+                  Navigator.pop(context);
+                }
+              }
+            },
+            child: Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCustomerSearchResults(List<CustomerModel> results) {
     return Container(
       margin: EdgeInsets.only(top: 8),
-      constraints: BoxConstraints(maxHeight: 150),
+      constraints: BoxConstraints(maxHeight: 200),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)]),
       child: results.isEmpty 
         ? ListTile(title: Text('Not Found'))
@@ -134,6 +191,7 @@ class _BillingScreenState extends State<BillingScreen> {
               return ListTile(
                 dense: true,
                 title: Text(c.name, style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('Bal: ₹${c.advanceBalance.toStringAsFixed(0)} | ${c.phone}', style: TextStyle(fontSize: 11)),
                 onTap: () {
                   setState(() {
                     selectedCustomer = c;
@@ -190,7 +248,6 @@ class _BillingScreenState extends State<BillingScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Selected Items (Cart)
           if (cartItems.isNotEmpty)
             _buildCartPreview(),
           
@@ -233,10 +290,11 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Widget _buildCartPreview() {
     return Container(
-      maxHeight: 120,
+      constraints: BoxConstraints(maxHeight: 120),
       padding: EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
       child: ListView.builder(
+        shrinkWrap: true,
         padding: EdgeInsets.symmetric(horizontal: 16),
         itemCount: cartItems.length,
         itemBuilder: (context, index) {
@@ -249,7 +307,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 Text('${item['name']} x ${item['quantity']}', style: TextStyle(fontWeight: FontWeight.w600)),
                 Row(
                   children: [
-                    Text('₹${item['total'] ?? (item['price'] * item['quantity'])}', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text('₹${(item['price'] * item['quantity']).toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold)),
                     SizedBox(width: 10),
                     GestureDetector(
                       onTap: () => setState(() => cartItems.removeAt(index)),

@@ -77,9 +77,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
           Expanded(
             child: db.isLoading
                 ? Center(child: CircularProgressIndicator())
-                : _searchController.text.isEmpty
-                    ? _buildCustomerList(db, auth)
-                    : _buildSearchResults(db, auth),
+                : _buildFullCustomerList(db, auth),
           ),
         ],
       ),
@@ -97,7 +95,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
         controller: _searchController,
         style: TextStyle(color: Colors.white),
         decoration: InputDecoration(
-          hintText: 'Search Database or Contacts...',
+          hintText: 'Search Name or Number...',
           hintStyle: TextStyle(color: Colors.white70),
           prefixIcon: Icon(Icons.search, color: Colors.white),
           suffixIcon: _searchController.text.isNotEmpty 
@@ -112,49 +110,113 @@ class _CustomerScreenState extends State<CustomerScreen> {
     );
   }
 
-  Widget _buildCustomerList(DatabaseService db, AuthService auth) {
-    return ListView.builder(
+  Widget _buildFullCustomerList(DatabaseService db, AuthService auth) {
+    final query = _searchController.text.toLowerCase();
+    
+    // Filter database customers
+    List<CustomerModel> dbCustomers = db.customers.where((c) => 
+      c.name.toLowerCase().contains(query) || c.phone.contains(query)
+    ).toList();
+
+    // Separate customers who have an upcoming payment date (Remaining Balance)
+    List<CustomerModel> urgentCustomers = dbCustomers.where((c) => 
+      c.advanceBalance > 0 && c.nextPaymentDate != null
+    ).toList();
+
+    // Sort urgent customers by date (closest date first)
+    urgentCustomers.sort((a, b) => a.nextPaymentDate!.compareTo(b.nextPaymentDate!));
+
+    // Remaining customers
+    List<CustomerModel> otherCustomers = dbCustomers.where((c) => 
+      !urgentCustomers.contains(c)
+    ).toList();
+
+    return ListView(
       padding: EdgeInsets.all(16),
-      itemCount: db.customers.length,
-      itemBuilder: (context, index) {
-        final customer = db.customers[index];
-        return _buildCustomerCard(customer, auth, db);
-      },
+      children: [
+        if (urgentCustomers.isNotEmpty) ...[
+          _buildSectionHeader('Pending Payments (Upcoming)', Colors.orange.shade900),
+          ...urgentCustomers.map((c) => _buildCustomerCard(c, auth, db, isUrgent: true)),
+          SizedBox(height: 16),
+        ],
+        
+        if (otherCustomers.isNotEmpty) ...[
+          _buildSectionHeader('All Customers', Color(0xFF3F51B5)),
+          ...otherCustomers.map((c) => _buildCustomerCard(c, auth, db)),
+        ],
+
+        // Show phone contacts if searching
+        if (_searchController.text.isNotEmpty) ...[
+          _buildSearchResults(db, auth),
+        ],
+      ],
     );
   }
 
-  Widget _buildCustomerCard(CustomerModel customer, AuthService auth, DatabaseService db) {
+  Widget _buildCustomerCard(CustomerModel customer, AuthService auth, DatabaseService db, {bool isUrgent = false}) {
     bool hasBalance = customer.advanceBalance > 0;
 
     return Card(
       margin: EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: isUrgent ? 4 : 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: isUrgent ? BorderSide(color: Colors.orange.shade300, width: 1) : BorderSide.none,
+      ),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundColor: hasBalance ? Colors.red.shade100 : Colors.green.shade100,
-          child: Text(customer.name[0], style: TextStyle(color: hasBalance ? Colors.red : Colors.green)),
+          backgroundColor: hasBalance ? Colors.red.shade50 : Colors.green.shade50,
+          child: Text(customer.name[0].toUpperCase(), 
+            style: TextStyle(color: hasBalance ? Colors.red : Colors.green, fontWeight: FontWeight.bold)),
         ),
-        title: Text(customer.name, style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(customer.phone),
+        title: Text(customer.name, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+        subtitle: Row(
+          children: [
+            Icon(Icons.phone, size: 14, color: Colors.grey),
+            SizedBox(width: 4),
+            Text(customer.phone, style: TextStyle(color: Colors.grey[700])),
+          ],
+        ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text('Balance', style: TextStyle(fontSize: 10, color: Colors.grey)),
             Text('₹${customer.advanceBalance.toStringAsFixed(0)}', 
-              style: TextStyle(color: hasBalance ? Colors.red : Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+              style: TextStyle(
+                color: hasBalance ? Colors.red : Colors.green, 
+                fontWeight: FontWeight.bold, 
+                fontSize: 18
+              )),
+            if (customer.nextPaymentDate != null && hasBalance)
+              Text(
+                'Due: ${DateFormat('dd/MM/yy').format(customer.nextPaymentDate!)}',
+                style: TextStyle(fontSize: 10, color: Colors.orange.shade900, fontWeight: FontWeight.bold),
+              ),
           ],
         ),
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            child: Column(
               children: [
-                _actionButton(Icons.call, 'Call', Colors.green, () => launchUrl(Uri.parse('tel:${customer.phone}'))),
-                _actionButton(Icons.message, 'SMS', Colors.deepOrange, () => _sendSMS(customer)),
-                _actionButton(Icons.edit, 'Edit', Colors.blue, () => _showCustomerDialog(context, auth, db, customer: customer)),
-                _actionButton(Icons.payments, 'Pay', Colors.orange, () => _showPaymentDialog(customer, auth, db)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _actionButton(Icons.call, 'Call', Colors.green, () => launchUrl(Uri.parse('tel:${customer.phone}'))),
+                    _actionButton(Icons.message, 'SMS', Colors.deepOrange, () => _sendSMS(customer)),
+                    _actionButton(Icons.edit, 'Edit', Colors.blue, () => _showCustomerDialog(context, auth, db, customer: customer)),
+                    _actionButton(Icons.payments, 'Pay', Colors.orange, () => _showPaymentDialog(customer, auth, db)),
+                  ],
+                ),
+                if (hasBalance) ...[
+                  Divider(),
+                  TextButton.icon(
+                    onPressed: () => _updatePaymentDate(customer, auth, db),
+                    icon: Icon(Icons.calendar_month, size: 16),
+                    label: Text('Update Next Payment Date', style: TextStyle(fontSize: 12)),
+                  )
+                ]
               ],
             ),
           )
@@ -163,63 +225,59 @@ class _CustomerScreenState extends State<CustomerScreen> {
     );
   }
 
+  // --- Support Methods ---
+  Future<void> _updatePaymentDate(CustomerModel customer, AuthService auth, DatabaseService db) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: customer.nextPaymentDate ?? DateTime.now().add(Duration(days: 7)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(Duration(days: 365)),
+    );
+    if (picked != null) {
+      final updatedCust = CustomerModel(
+        id: customer.id, name: customer.name, phone: customer.phone,
+        email: customer.email, address: customer.address, advanceBalance: customer.advanceBalance,
+        nextPaymentDate: picked, createdAt: customer.createdAt,
+      );
+      await db.updateCustomer(updatedCust, auth);
+    }
+  }
+
   void _sendSMS(CustomerModel customer) async {
     final String message = "नमस्कार ${customer.name}, चिकन मार्ट मध्ये आपले स्वागत आहे! आपली सध्याची थकबाकी ₹${customer.advanceBalance.toStringAsFixed(0)} आहे.";
-    final Uri smsUri = Uri.parse('sms:${customer.phone}?body=${Uri.encodeComponent(message)}');
-    
-    if (await canLaunchUrl(smsUri)) {
-      await launchUrl(smsUri);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Could not launch SMS app")));
-    }
+    launchUrl(Uri.parse('sms:${customer.phone}?body=${Uri.encodeComponent(message)}'));
   }
 
   void _showCustomerDialog(BuildContext context, AuthService auth, DatabaseService db, {CustomerModel? customer}) {
     final nameController = TextEditingController(text: customer?.name);
     final phoneController = TextEditingController(text: customer?.phone);
-    final emailController = TextEditingController(text: customer?.email);
-    final addressController = TextEditingController(text: customer?.address);
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(customer == null ? 'Add Customer' : 'Edit Customer'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameController, decoration: InputDecoration(labelText: 'Name')),
-              TextField(controller: phoneController, decoration: InputDecoration(labelText: 'Phone'), keyboardType: TextInputType.phone),
-              TextField(controller: emailController, decoration: InputDecoration(labelText: 'Email')),
-              TextField(controller: addressController, decoration: InputDecoration(labelText: 'Address')),
-            ],
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameController, decoration: InputDecoration(labelText: 'Name')),
+            TextField(controller: phoneController, decoration: InputDecoration(labelText: 'Phone'), keyboardType: TextInputType.phone),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.isNotEmpty && phoneController.text.isNotEmpty) {
+              if (nameController.text.isNotEmpty) {
                 final newCustomer = CustomerModel(
-                  id: customer?.id ?? '',
-                  name: nameController.text,
-                  phone: phoneController.text,
-                  email: emailController.text,
-                  address: addressController.text,
-                  createdAt: customer?.createdAt ?? DateTime.now(),
-                  advanceBalance: customer?.advanceBalance ?? 0.0,
+                  id: customer?.id ?? '', name: nameController.text, phone: phoneController.text,
+                  createdAt: customer?.createdAt ?? DateTime.now(), advanceBalance: customer?.advanceBalance ?? 0.0,
                   nextPaymentDate: customer?.nextPaymentDate,
                 );
-                bool success;
-                if (customer == null) {
-                  success = await db.addCustomer(newCustomer, auth);
-                } else {
-                  success = await db.updateCustomer(newCustomer, auth);
-                }
-                if (success) Navigator.pop(context);
+                if (customer == null) await db.addCustomer(newCustomer, auth);
+                else await db.updateCustomer(newCustomer, auth);
+                Navigator.pop(context);
               }
             },
-            child: Text(customer == null ? 'Add' : 'Update'),
+            child: Text('Save'),
           ),
         ],
       ),
@@ -232,32 +290,28 @@ class _CustomerScreenState extends State<CustomerScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Receive Payment'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: 'Amount', prefixText: '₹ '),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Current Balance: ₹${customer.advanceBalance}', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            TextField(controller: controller, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Amount Paid')),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               if (controller.text.isNotEmpty) {
-                double payAmount = double.parse(controller.text);
                 final updatedCust = CustomerModel(
-                  id: customer.id,
-                  name: customer.name,
-                  phone: customer.phone,
-                  email: customer.email,
-                  address: customer.address,
-                  advanceBalance: customer.advanceBalance - payAmount,
-                  nextPaymentDate: customer.nextPaymentDate,
-                  createdAt: customer.createdAt,
+                  id: customer.id, name: customer.name, phone: customer.phone,
+                  advanceBalance: customer.advanceBalance - double.parse(controller.text),
+                  nextPaymentDate: customer.nextPaymentDate, createdAt: customer.createdAt,
                 );
                 await db.updateCustomer(updatedCust, auth);
                 Navigator.pop(context);
               }
             },
-            child: Text('Confirm'),
+            child: Text('Update'),
           ),
         ],
       ),
@@ -266,54 +320,31 @@ class _CustomerScreenState extends State<CustomerScreen> {
 
   Widget _buildSearchResults(DatabaseService db, AuthService auth) {
     final query = _searchController.text.toLowerCase();
-    final dbMatches = db.customers.where((c) => c.name.toLowerCase().contains(query) || c.phone.contains(query)).toList();
-    final contactMatches = _contacts.where((c) => c.displayName.toLowerCase().contains(query) || (c.phones.isNotEmpty && c.phones.first.number.replaceAll(RegExp(r'\D'), '').contains(query))).toList();
-
-    return ListView(
-      padding: EdgeInsets.all(16),
+    final contactMatches = _contacts.where((c) => c.displayName.toLowerCase().contains(query) || (c.phones.isNotEmpty && c.phones.first.number.contains(query))).toList();
+    if (contactMatches.isEmpty) return SizedBox.shrink();
+    return Column(
       children: [
-        if (dbMatches.isNotEmpty) ...[
-          _buildSectionHeader('Shop Database'),
-          ...dbMatches.map((c) => _buildCustomerCard(c, auth, db)),
-        ],
-        if (contactMatches.isNotEmpty) ...[
-          _buildSectionHeader('Phone Contacts'),
-          ...contactMatches.map((c) => _buildContactItem(c, auth, db)),
-        ],
+        _buildSectionHeader('Phone Contacts', Colors.grey),
+        ...contactMatches.map((c) => _buildContactItem(c, auth, db)),
       ],
     );
   }
 
   Widget _buildContactItem(Contact contact, AuthService auth, DatabaseService db) {
-    final phone = contact.phones.isNotEmpty ? contact.phones.first.number : 'No number';
-    return Card(
-      margin: EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(backgroundColor: Colors.grey[200], child: Icon(Icons.person_add, color: Colors.grey)),
-        title: Text(contact.displayName),
-        subtitle: Text(phone),
-        trailing: ElevatedButton(
-          child: Text('ADD TO SHOP'),
-          onPressed: () => _addContactToDatabase(contact, auth, db),
-        ),
-      ),
+    return ListTile(
+      leading: CircleAvatar(child: Icon(Icons.person_add)),
+      title: Text(contact.displayName),
+      onTap: () async {
+        final phone = contact.phones.isNotEmpty ? contact.phones.first.number.replaceAll(RegExp(r'\D'), '') : '';
+        await db.addCustomer(CustomerModel(id: '', name: contact.displayName, phone: phone, createdAt: DateTime.now()), auth);
+      },
     );
   }
 
-  void _addContactToDatabase(Contact contact, AuthService auth, DatabaseService db) async {
-    final phone = contact.phones.isNotEmpty ? contact.phones.first.number.replaceAll(RegExp(r'\D'), '') : '';
-    final newCust = CustomerModel(id: '', name: contact.displayName, phone: phone, createdAt: DateTime.now());
-    bool success = await db.addCustomer(newCust, auth);
-    if (success) {
-      _searchController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${contact.displayName} added!')));
-    }
-  }
-
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, Color color) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      child: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3F51B5), fontSize: 12)),
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14)),
     );
   }
 
@@ -323,7 +354,6 @@ class _CustomerScreenState extends State<CustomerScreen> {
       child: Column(
         children: [
           Icon(icon, color: color),
-          SizedBox(height: 4),
           Text(label, style: TextStyle(fontSize: 12, color: color)),
         ],
       ),
