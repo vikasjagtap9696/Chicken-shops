@@ -7,11 +7,12 @@ import 'screen/dashboard_screen.dart';
 import 'services/auth_service.dart';
 import 'services/database_service.dart';
 
-void main() async {
-  // Ensures flutter is ready before rendering
+void main() {
+  // त्वरित सुरू होण्यासाठी ensureInitialized() आणि runApp() मध्ये अंतर नको
   WidgetsFlutterBinding.ensureInitialized();
   runApp(MyApp());
 }
+
 
 class MyApp extends StatelessWidget {
   @override
@@ -25,26 +26,16 @@ class MyApp extends StatelessWidget {
         title: 'Chicken Mart',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
+          useMaterial3: true, // उशीर टाळण्यासाठी नवीन रेंडरिंग इंजिन वापरा
           primaryColor: Color(0xFFE64A19),
-          primarySwatch: Colors.orange,
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
           scaffoldBackgroundColor: Colors.white,
           fontFamily: GoogleFonts.poppins().fontFamily,
-          appBarTheme: AppBarTheme(
-            backgroundColor: Color(0xFFE64A19),
-            elevation: 0,
-            centerTitle: true,
-            titleTextStyle: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
         ),
         home: SplashScreen(),
         routes: {
           '/dashboard': (context) => DashboardScreen(),
           '/login': (context) => LoginScreen(),
-          '/splash': (context) => SplashScreen(),
         },
       ),
     );

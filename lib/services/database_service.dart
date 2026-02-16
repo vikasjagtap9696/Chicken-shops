@@ -8,7 +8,7 @@ import '../models/user_model.dart';
 import 'auth_service.dart';
 
 class DatabaseService extends ChangeNotifier {
-  static const String baseUrl = 'http://localhost:5000/api';
+  static const String baseUrl = 'http://192.168.1.8:5000/api';
   
   List<StockModel> _stocks = [];
   List<SaleModel> _sales = [];
@@ -23,56 +23,26 @@ class DatabaseService extends ChangeNotifier {
   List<SaleModel> get sales => _sales;
   List<CustomerModel> get customers => _customers;
   List<UserModel> get staff => _staff;
-  double get dailyRevenue => _dailyRevenue;
-  double get monthlyRevenue => _monthlyRevenue;
+  double get todaySales => _dailyRevenue;
+  double get todayProfit => _dailyRevenue * 0.25; // Default 25% profit logic
+  double get totalStockValue => _stocks.fold(0, (sum, item) => sum + (item.currentStock * item.pricePerUnit));
   bool get isLoading => _isLoading;
 
-  // --- STAFF MANAGEMENT ---
-
-  Future<void> fetchStaff(AuthService auth) async {
+  Future<void> fetchAllOrders(AuthService auth) async {
     _isLoading = true;
     notifyListeners();
     try {
-      final response = await http.get(Uri.parse('$baseUrl/auth/staff'), headers: auth.getAuthHeaders());
+      final response = await http.get(Uri.parse('$baseUrl/orders'), headers: auth.getAuthHeaders());
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body)['data'];
-        _staff = data.map((json) => UserModel.fromJson(json)).toList();
+        _sales = data.map((json) => SaleModel.fromJson(json)).toList();
       }
     } catch (e) {
-      debugPrint('Fetch Staff Error: $e');
+      debugPrint('Fetch All Orders Error: $e');
     }
     _isLoading = false;
     notifyListeners();
   }
-
-  Future<bool> addStaff(Map<String, dynamic> staffData, AuthService auth) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/register'), // Reuse register for adding staff
-        headers: auth.getAuthHeaders(),
-        body: json.encode(staffData),
-      );
-      if (response.statusCode == 201) {
-        await fetchStaff(auth);
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
-  }
-
-  Future<bool> deleteStaff(String staffId, AuthService auth) async {
-    try {
-      final response = await http.delete(Uri.parse('$baseUrl/auth/staff/$staffId'), headers: auth.getAuthHeaders());
-      if (response.statusCode == 200) {
-        _staff.removeWhere((s) => s.id == staffId);
-        notifyListeners();
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
-  }
-
-  // --- SALES & REPORTS ---
 
   Future<void> fetchSales(AuthService auth) async {
     await fetchDailySales(auth);
@@ -89,11 +59,55 @@ class DatabaseService extends ChangeNotifier {
         final List<dynamic> ordersJson = json.decode(response.body)['data']['orders'];
         _sales = ordersJson.map((json) => SaleModel.fromJson(json)).toList();
       }
-    } catch (e) {
-      debugPrint('Fetch Daily Sales Error: $e');
-    }
+    } catch (e) {}
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<bool> createSale(Map<String, dynamic> saleData, AuthService auth) async {
+    try {
+      final response = await http.post(Uri.parse('$baseUrl/orders'), headers: auth.getAuthHeaders(), body: json.encode(saleData));
+      if (response.statusCode == 201) {
+        await fetchStocks(auth);
+        await fetchRevenueSummary(auth);
+        return true;
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+
+  Future<void> fetchStocks(AuthService auth) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/stock/summary'), headers: auth.getAuthHeaders());
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body)['data'];
+        _stocks = data.map((json) => StockModel.fromJson(json)).toList();
+      }
+    } catch (e) {}
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> recordStockMovement(String productId, double quantity, String type, AuthService auth) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/stock'),
+        headers: auth.getAuthHeaders(),
+        body: json.encode({
+          'productId': productId,
+          'quantity': quantity,
+          'type': type,
+          'date': DateTime.now().toIso8601String().split('T')[0]
+        }),
+      );
+      if (response.statusCode == 201) {
+        await fetchStocks(auth);
+        return true;
+      }
+      return false;
+    } catch (e) { return false; }
   }
 
   Future<void> fetchRevenueSummary(AuthService auth) async {
@@ -105,76 +119,8 @@ class DatabaseService extends ChangeNotifier {
         _monthlyRevenue = double.tryParse(data['monthlyRevenue'].toString()) ?? 0.0;
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('Fetch Revenue Error: $e');
-    }
+    } catch (e) {}
   }
-
-  Future<bool> createSale(Map<String, dynamic> saleData, AuthService auth) async {
-    try {
-      final response = await http.post(Uri.parse('$baseUrl/orders'), headers: auth.getAuthHeaders(), body: json.encode(saleData));
-      if (response.statusCode == 201) {
-        await fetchRevenueSummary(auth);
-        await fetchDailySales(auth);
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
-  }
-
-  // --- STOCK (INVENTORY) OPERATIONS ---
-
-  Future<void> fetchStocks(AuthService auth) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/products'), headers: auth.getAuthHeaders());
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body)['data'];
-        _stocks = data.map((json) => StockModel.fromJson(json)).toList();
-      }
-    } catch (e) {
-      debugPrint('Fetch Stocks Error: $e');
-    }
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<bool> addStock(Map<String, dynamic> productData, AuthService auth) async {
-    try {
-      final response = await http.post(Uri.parse('$baseUrl/products'), headers: auth.getAuthHeaders(), body: json.encode(productData));
-      if (response.statusCode == 201) {
-        await fetchStocks(auth);
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
-  }
-
-  Future<bool> updateStock(String id, Map<String, dynamic> updateData, AuthService auth) async {
-    try {
-      final response = await http.put(Uri.parse('$baseUrl/products/$id'), headers: auth.getAuthHeaders(), body: json.encode(updateData));
-      if (response.statusCode == 200) {
-        await fetchStocks(auth);
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
-  }
-
-  Future<bool> deleteStock(String id, AuthService auth) async {
-    try {
-      final response = await http.delete(Uri.parse('$baseUrl/products/$id'), headers: auth.getAuthHeaders());
-      if (response.statusCode == 200) {
-        _stocks.removeWhere((s) => s.id == id);
-        notifyListeners();
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
-  }
-
-  // --- CUSTOMER OPERATIONS ---
 
   Future<void> fetchCustomers(AuthService auth) async {
     try {
@@ -189,21 +135,12 @@ class DatabaseService extends ChangeNotifier {
 
   Future<bool> addCustomer(CustomerModel customer, AuthService auth) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/customers'),
-        headers: auth.getAuthHeaders(),
-        body: json.encode({
-          'name': customer.name,
-          'phone': customer.phone,
-          'email': customer.email ?? '',
-          'address': customer.address ?? '',
-        }),
-      );
-      if (response.statusCode == 201) {
+      final response = await http.post(Uri.parse('$baseUrl/customers'), headers: auth.getAuthHeaders(), body: json.encode({'name': customer.name, 'phone': customer.phone, 'email': customer.email ?? '', 'address': customer.address ?? ''}));
+      if (response.statusCode == 201) { 
         final newCustomer = CustomerModel.fromJson(json.decode(response.body)['data']);
         _customers.add(newCustomer);
-        notifyListeners();
-        return true;
+        notifyListeners(); 
+        return true; 
       }
       return false;
     } catch (e) { return false; }
@@ -212,10 +149,7 @@ class DatabaseService extends ChangeNotifier {
   Future<bool> updateCustomer(CustomerModel customer, AuthService auth) async {
     try {
       final response = await http.put(Uri.parse('$baseUrl/customers/${customer.id}'), headers: auth.getAuthHeaders(), body: json.encode({'name': customer.name, 'phone': customer.phone, 'email': customer.email, 'address': customer.address}));
-      if (response.statusCode == 200) {
-        await fetchCustomers(auth);
-        return true;
-      }
+      if (response.statusCode == 200) { await fetchCustomers(auth); return true; }
       return false;
     } catch (e) { return false; }
   }
@@ -223,18 +157,56 @@ class DatabaseService extends ChangeNotifier {
   Future<bool> deleteCustomer(String id, AuthService auth) async {
     try {
       final response = await http.delete(Uri.parse('$baseUrl/customers/$id'), headers: auth.getAuthHeaders());
-      if (response.statusCode == 200) {
-        _customers.removeWhere((c) => c.id == id);
-        notifyListeners();
-        return true;
-      }
+      if (response.statusCode == 200) { _customers.removeWhere((c) => c.id == id); notifyListeners(); return true; }
       return false;
     } catch (e) { return false; }
   }
 
-  // GETTERS
-  double get todaySales => _dailyRevenue;
-  double get todayProfit => _dailyRevenue * 0.25; 
-  double get totalStockValue => _stocks.fold(0, (sum, item) => sum + (item.quantity * item.sellingPrice));
-  List<StockModel> get lowStockItems => _stocks.where((s) => s.isLowStock).toList();
+  Future<void> fetchStaff(AuthService auth) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/auth/staff'), headers: auth.getAuthHeaders());
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body)['data'];
+        _staff = data.map((json) => UserModel.fromJson(json)).toList();
+      }
+    } catch (e) {}
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> addStaff(Map<String, dynamic> staffData, AuthService auth) async {
+    try {
+      final response = await http.post(Uri.parse('$baseUrl/auth/register'), headers: auth.getAuthHeaders(), body: json.encode(staffData));
+      if (response.statusCode == 201) { await fetchStaff(auth); return true; }
+      return false;
+    } catch (e) { return false; }
+  }
+
+  Future<bool> deleteStaff(String staffId, AuthService auth) async {
+    try {
+      final response = await http.delete(Uri.parse('$baseUrl/auth/staff/$staffId'), headers: auth.getAuthHeaders());
+      if (response.statusCode == 200) { _staff.removeWhere((s) => s.id == staffId); notifyListeners(); return true; }
+      return false;
+    } catch (e) { return false; }
+  }
+
+  Future<bool> addStock(Map<String, dynamic> data, AuthService auth) async {
+    final res = await http.post(Uri.parse('$baseUrl/products'), headers: auth.getAuthHeaders(), body: json.encode(data));
+    if (res.statusCode == 201) { await fetchStocks(auth); return true; }
+    return false;
+  }
+
+  Future<bool> updateStock(String id, Map<String, dynamic> data, AuthService auth) async {
+    final res = await http.put(Uri.parse('$baseUrl/products/$id'), headers: auth.getAuthHeaders(), body: json.encode(data));
+    if (res.statusCode == 200) { await fetchStocks(auth); return true; }
+    return false;
+  }
+
+  Future<bool> deleteStock(String id, AuthService auth) async {
+    final res = await http.delete(Uri.parse('$baseUrl/products/$id'), headers: auth.getAuthHeaders());
+    if (res.statusCode == 200) { _stocks.removeWhere((s) => s.productId == id); notifyListeners(); return true; }
+    return false;
+  }
 }

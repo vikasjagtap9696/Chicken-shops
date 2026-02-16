@@ -27,9 +27,10 @@ dependencies:
   # Local Storage
   shared_preferences: ^2.2.2
 
-  # PDF Generation
+  # PDF & Excel Generation
   pdf: ^3.10.4
   printing: ^5.11.1
+  excel: ^4.0.1
 
   # Charts for Reports
   fl_chart: ^0.66.0

@@ -9,6 +9,7 @@ class CustomerModel {
   final double advanceBalance;
   final DateTime createdAt;
   final DateTime? lastPurchaseDate;
+  final DateTime? nextPaymentDate; // उरलेले पैसे मिळण्याची तारीख
   final bool isRegular;
 
   CustomerModel({
@@ -22,12 +23,12 @@ class CustomerModel {
     this.advanceBalance = 0.0,
     required this.createdAt,
     this.lastPurchaseDate,
+    this.nextPaymentDate,
     this.isRegular = false,
   });
 
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
     return CustomerModel(
-      // integer ID ला string मध्ये बदलले आहे
       id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       phone: json['phone'] ?? '',
@@ -38,7 +39,20 @@ class CustomerModel {
       advanceBalance: json['creditBalance'] != null ? double.tryParse(json['creditBalance'].toString()) ?? 0.0 : 0.0,
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
       lastPurchaseDate: json['lastPurchaseDate'] != null ? DateTime.parse(json['lastPurchaseDate']) : null,
+      nextPaymentDate: json['nextPaymentDate'] != null ? DateTime.parse(json['nextPaymentDate']) : null,
       isRegular: json['isRegular'] ?? false,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'address': address,
+      'creditBalance': advanceBalance,
+      'nextPaymentDate': nextPaymentDate?.toIso8601String(),
+    };
   }
 }

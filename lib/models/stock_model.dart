@@ -1,45 +1,33 @@
 class StockModel {
-  final String id;
-  final String name;
+  final String productId;
+  final String productName;
   final String category;
   final String unit;
-  final double purchasePrice; // खरेदी किंमत
-  final double sellingPrice; // विक्री किंमत (Backend: pricePerUnit)
-  final String? description;
+  final double pricePerUnit;
   final bool isAvailable;
-  final double quantity;
-  final DateTime createdAt;
+  final double currentStock;
 
   StockModel({
-    required this.id,
-    required this.name,
+    required this.productId,
+    required this.productName,
     required this.category,
     required this.unit,
-    required this.purchasePrice,
-    required this.sellingPrice,
-    this.description,
-    this.isAvailable = true,
-    this.quantity = 0.0,
-    required this.createdAt,
+    required this.pricePerUnit,
+    required this.isAvailable,
+    required this.currentStock,
   });
-
-  // नफा आणि मार्जिन कॅल्क्युलेशन
-  double get profit => sellingPrice - purchasePrice;
-  double get profitMargin => purchasePrice > 0 ? (profit / purchasePrice) * 100 : 0.0;
 
   factory StockModel.fromJson(Map<String, dynamic> json) {
     return StockModel(
-      id: json['id']?.toString() ?? '',
-      name: json['name'] ?? '',
-      category: json['category'] ?? 'chicken',
+      // Backend may return 'id' or 'productId' or 'id' as int
+      productId: (json['productId'] ?? json['id'] ?? '').toString(),
+      // Backend may return 'name' or 'productName'
+      productName: json['productName'] ?? json['name'] ?? 'Unknown Product',
+      category: json['category'] ?? 'other',
       unit: json['unit'] ?? 'kg',
-      // बॅकएंड कडून येणारी खरेदी किंमत (खरेदी किंमत बॅकएंडला नसेल तर ० सेट होईल)
-      purchasePrice: double.tryParse(json['purchasePrice']?.toString() ?? '0') ?? 0.0,
-      sellingPrice: double.tryParse(json['pricePerUnit']?.toString() ?? '0') ?? 0.0,
-      description: json['description'],
+      pricePerUnit: double.tryParse((json['pricePerUnit'] ?? json['price'] ?? '0').toString()) ?? 0.0,
       isAvailable: json['isAvailable'] ?? true,
-      quantity: double.tryParse(json['quantity']?.toString() ?? '0') ?? 0.0,
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
+      currentStock: double.tryParse((json['currentStock'] ?? json['stock'] ?? '0').toString()) ?? 0.0,
     );
   }
 
@@ -53,5 +41,6 @@ class StockModel {
     }
   }
 
-  bool get isLowStock => quantity <= 5;
+  bool get isLowStock => currentStock > 0 && currentStock <= 5;
+  bool get isOutOfStock => currentStock <= 0;
 }

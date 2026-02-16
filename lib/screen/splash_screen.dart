@@ -19,32 +19,42 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
 
     _animation = CurvedAnimation(
       parent: _controller,
-      curve: Curves.elasticOut,
+      curve: Curves.easeOutBack,
     );
 
     _controller.forward();
-
     _checkAuth();
   }
 
   void _checkAuth() {
-    Timer(Duration(seconds: 4), () {
+    // वेळ कमी केला जेणेकरून ॲप लवकर सुरू होईल
+    Timer(Duration(seconds: 2), () {
+      if (!mounted) return;
       final auth = Provider.of<AuthService>(context, listen: false);
+      
       if (auth.isAuthenticated) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => DashboardScreen()),
+          PageRouteBuilder(
+            pageBuilder: (context, anim1, anim2) => DashboardScreen(),
+            transitionsBuilder: (context, anim1, anim2, child) => FadeTransition(opacity: anim1, child: child),
+            transitionDuration: Duration(milliseconds: 500),
+          ),
         );
       } else {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => LoginScreen()),
+          PageRouteBuilder(
+            pageBuilder: (context, anim1, anim2) => LoginScreen(),
+            transitionsBuilder: (context, anim1, anim2, child) => FadeTransition(opacity: anim1, child: child),
+            transitionDuration: Duration(milliseconds: 500),
+          ),
         );
       }
     });
@@ -66,31 +76,23 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           children: [
             ScaleTransition(
               scale: _animation,
-              child: FadeTransition(
-                opacity: _controller,
-                child: Image.asset(
-                  'assets/logo.png',
-                  width: 250,
-                  height: 250,
-                ),
+              child: Image.asset(
+                'assets/logo.png',
+                width: 180,
+                height: 180,
+                // इमेज लोड न झाल्यास एरर टाळण्यासाठी
+                errorBuilder: (context, error, stackTrace) => Icon(Icons.shopping_cart, size: 100, color: Colors.orange),
               ),
             ),
-            SizedBox(height: 20),
-            FadeTransition(
-              opacity: _controller,
-              child: Text(
-                'CHICKEN MART',
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFE64A19),
-                  letterSpacing: 2,
-                ),
+            SizedBox(height: 24),
+            Text(
+              'CHICKEN MART',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFE64A19),
+                letterSpacing: 1.2,
               ),
-            ),
-            SizedBox(height: 10),
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFE64A19)),
             ),
           ],
         ),

@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
 class AuthService extends ChangeNotifier {
-  static const String baseUrl = 'http://localhost:5000/api'; 
+  static const String baseUrl = 'http://192.168.1.8:5000/api';
   
   UserModel? _currentUser;
   String? _token;
@@ -48,16 +48,14 @@ class AuthService extends ChangeNotifier {
           'email': trimmedEmail,
           'password': password,
         }),
-      ).timeout(const Duration(seconds: 5)); // Set a timeout
+      ).timeout(const Duration(seconds: 10));
 
       final responseData = json.decode(response.body);
 
-      if (response.statusCode == 200 && responseData['success'] == true) {
+      if (response.statusCode == 200 && (responseData['success'] == true || responseData['token'] != null)) {
         _token = responseData['token'];
-        _currentUser = UserModel.fromJson(responseData['data']);
-        
-        await _saveUserSession(_token!, responseData['data']);
-        
+        _currentUser = UserModel.fromJson(responseData['data'] ?? responseData['user'] ?? {});
+        await _saveUserSession(_token!, responseData['data'] ?? responseData['user'] ?? {});
         _isLoading = false;
         notifyListeners();
         return true;
@@ -68,29 +66,41 @@ class AuthService extends ChangeNotifier {
         return false;
       }
     } catch (e) {
-      debugPrint('Server connection failed, checking for offline admin login: $e');
-      
-      // जर सर्व्हर बंद असेल, तर डिफॉल्ट ॲडमिन क्रेडेंशियल्स तपासा
-      if (trimmedEmail == 'admin@chickenshop.com' && password == '123456') {
-        _token = 'offline_admin_token';
-        _currentUser = UserModel(
-          id: '0',
-          name: 'Admin (Offline)',
-          email: trimmedEmail,
-          phone: '0000000000',
-          shopName: 'Chicken Mart',
-          role: 'admin',
-          createdAt: DateTime.now(),
-        );
+      _error = "Server connection failed: $e";
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 
-        await _saveUserSession(_token!, _currentUser!.toJson());
-        
+  Future<bool> updateProfile(Map<String, dynamic> updateData) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/profile'),
+        headers: getAuthHeaders(),
+        body: json.encode(updateData),
+      );
+
+      final responseData = json.decode(response.body);
+
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        _currentUser = UserModel.fromJson(responseData['data']);
+        await _saveUserSession(_token!, responseData['data']);
         _isLoading = false;
         notifyListeners();
         return true;
+      } else {
+        _error = responseData['message'] ?? 'Update failed';
+        _isLoading = false;
+        notifyListeners();
+        return false;
       }
-
-      _error = "Server connection failed. Default login not matched.";
+    } catch (e) {
+      _error = "Connection failed";
       _isLoading = false;
       notifyListeners();
       return false;

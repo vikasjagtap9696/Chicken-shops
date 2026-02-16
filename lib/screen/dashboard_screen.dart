@@ -9,6 +9,10 @@ import 'sales_screen.dart';
 import 'stock_screen.dart';
 import 'customer_screen.dart';
 import 'staff_screen.dart';
+import 'inventory_screen.dart';
+import 'sales_analysis_screen.dart';
+import 'order_list_screen.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -44,10 +48,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSummaryCards(db),
+                  _buildSummaryCards(context, db),
                   SizedBox(height: 24),
                   Text(
-                    'Quick Actions',
+                    'Chicken Shop Management',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -114,15 +118,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSummaryCards(DatabaseService db) {
+  Widget _buildSummaryCards(BuildContext context, DatabaseService db) {
     return Row(
       children: [
         Expanded(
-          child: _buildStatCard(
-            'Today\'s Sales',
-            '₹${db.todaySales.toStringAsFixed(0)}',
-            Icons.trending_up,
-            Color(0xFF4CAF50),
+          child: InkWell(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => SalesAnalysisScreen())),
+            child: _buildStatCard(
+              'Today\'s Sales',
+              '₹${db.todaySales.toStringAsFixed(0)}',
+              Icons.trending_up,
+              Color(0xFF4CAF50),
+            ),
           ),
         ),
         SizedBox(width: 12),
@@ -167,8 +174,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildActionGrid(BuildContext context) {
     final List<Map<String, dynamic>> items = [
       {'title': 'Billing', 'icon': FontAwesomeIcons.fileInvoice, 'color': Color(0xFF4CAF50), 'page': BillingScreen()},
+      {'title': 'Order History', 'icon': FontAwesomeIcons.history, 'color': Colors.deepOrange, 'page': OrderListScreen()},
       {'title': 'Sales Report', 'icon': FontAwesomeIcons.chartLine, 'color': Color(0xFF2196F3), 'page': SalesScreen()},
-      {'title': 'Inventory', 'icon': FontAwesomeIcons.boxesStacked, 'color': Color(0xFF9C27B0), 'page': StockScreen()},
+      {'title': 'Stock In/Out', 'icon': FontAwesomeIcons.boxesStacked, 'color': Color(0xFF9C27B0), 'page': StockScreen()},
+      {'title': 'Inventory', 'icon': FontAwesomeIcons.listCheck, 'color': Colors.blueGrey, 'page': InventoryScreen()},
       {'title': 'Customers', 'icon': FontAwesomeIcons.users, 'color': Color(0xFFE64A19), 'page': CustomerScreen()},
     ];
 
@@ -245,7 +254,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ListTile(
               leading: Icon(Icons.edit_outlined, color: Colors.blue),
               title: Text('Edit Profile'),
-              onTap: () { Navigator.pop(context); _showEditProfileDialog(auth); },
+              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileScreen())); },
             ),
             if (isAdmin) ListTile(
               leading: Icon(Icons.people_outline, color: Colors.teal),
@@ -263,36 +272,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showEditProfileDialog(AuthService auth) {
-    final nameController = TextEditingController(text: auth.currentUser?.name);
-    final shopController = TextEditingController(text: auth.currentUser?.shopName);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit Profile', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: InputDecoration(labelText: 'Full Name')),
-            TextField(controller: shopController, decoration: InputDecoration(labelText: 'Shop Name')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Profile updated!')));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFE64A19)),
-            child: Text('Save', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }

@@ -12,7 +12,6 @@ class StockScreen extends StatefulWidget {
 
 class _StockScreenState extends State<StockScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedCategory = 'All';
 
   @override
   void initState() {
@@ -30,145 +29,122 @@ class _StockScreenState extends State<StockScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Inventory Management', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        backgroundColor: Color(0xFF9C27B0),
+        title: Text('Stock & Inventory', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo,
         actions: [
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: () => db.fetchStocks(auth),
-          ),
-          IconButton(
-            icon: Icon(Icons.add_box),
-            onPressed: () => _showAddStockDialog(context, auth, db),
-          ),
+          IconButton(icon: Icon(Icons.refresh), onPressed: () => db.fetchStocks(auth)),
         ],
       ),
       body: Column(
         children: [
-          _buildSearchBar(),
-          _buildCategoryFilter(),
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search items...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (v) => setState(() {}),
+            ),
+          ),
           Expanded(
             child: db.isLoading
                 ? Center(child: CircularProgressIndicator())
-                : _buildStockList(db, auth),
+                : ListView.builder(
+                    itemCount: db.stocks.length,
+                    itemBuilder: (context, index) {
+                      final item = db.stocks[index];
+                      if (_searchController.text.isNotEmpty && !item.productName.toLowerCase().contains(_searchController.text.toLowerCase())) {
+                        return SizedBox.shrink();
+                      }
+                      return _buildStockItem(item, db, auth);
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search stock items...',
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          filled: true,
-          fillColor: Colors.grey[50],
-        ),
-        onChanged: (value) => setState(() {}),
-      ),
-    );
-  }
-
-  Widget _buildCategoryFilter() {
-    final categories = ['All', 'Chicken', 'Mutton', 'Fish', 'Egg'];
-    return Container(
-      height: 50,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: 16),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          bool isSelected = _selectedCategory == categories[index];
-          return Padding(
-            padding: EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(categories[index]),
-              selected: isSelected,
-              onSelected: (val) => setState(() => _selectedCategory = categories[index]),
-              selectedColor: Color(0xFF9C27B0).withOpacity(0.2),
-              labelStyle: TextStyle(color: isSelected ? Color(0xFF9C27B0) : Colors.black),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildStockList(DatabaseService db, AuthService auth) {
-    var items = db.stocks;
-    
-    if (_selectedCategory != 'All') {
-      items = items.where((i) => i.category.toLowerCase() == _selectedCategory.toLowerCase()).toList();
-    }
-    
-    if (_searchController.text.isNotEmpty) {
-      items = items.where((i) => i.name.toLowerCase().contains(_searchController.text.toLowerCase())).toList();
-    }
-
-    if (items.isEmpty) return Center(child: Text('No stock items found.'));
-
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return Card(
-          margin: EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
-            leading: Text(item.emoji, style: TextStyle(fontSize: 30)),
-            title: Text(item.name, style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('Price: ₹${item.sellingPrice} | Stock: ${item.quantity} ${item.unit}'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
+  Widget _buildStockItem(StockModel item, DatabaseService db, AuthService auth) {
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
               children: [
-                IconButton(icon: Icon(Icons.edit, color: Colors.blue), onPressed: () {}),
-                IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => db.deleteStock(item.id, auth)),
+                Text(item.emoji, style: TextStyle(fontSize: 32)),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.productName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('Category: ${item.category}', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('${item.currentStock} ${item.unit}', 
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: item.isOutOfStock ? Colors.red : Colors.green)),
+                    Text('In Stock', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
               ],
             ),
-          ),
-        );
-      },
+            Divider(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _showMovementDialog(context, item, 'in', db, auth),
+                  icon: Icon(Icons.add, size: 18),
+                  label: Text('STOCK IN'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                ),
+                SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () => _showMovementDialog(context, item, 'out', db, auth),
+                  icon: Icon(Icons.remove, size: 18),
+                  label: Text('STOCK OUT'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  void _showAddStockDialog(BuildContext context, AuthService auth, DatabaseService db) {
-    final nameController = TextEditingController();
-    final priceController = TextEditingController();
-    final qtyController = TextEditingController();
-    String category = 'chicken';
-
+  void _showMovementDialog(BuildContext context, StockModel item, String type, DatabaseService db, AuthService auth) {
+    final controller = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Add New Product'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: InputDecoration(labelText: 'Product Name')),
-            TextField(controller: priceController, decoration: InputDecoration(labelText: 'Price Per Unit'), keyboardType: TextInputType.number),
-            TextField(controller: qtyController, decoration: InputDecoration(labelText: 'Initial Stock'), keyboardType: TextInputType.number),
-          ],
+        title: Text('Stock ${type.toUpperCase()} - ${item.productName}'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: 'Quantity in ${item.unit}'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              final data = {
-                "name": nameController.text,
-                "pricePerUnit": double.parse(priceController.text),
-                "category": category,
-                "quantity": double.parse(qtyController.text),
-              };
-              bool success = await db.addStock(data, auth);
-              if (success) Navigator.pop(context);
+              if (controller.text.isNotEmpty) {
+                bool success = await db.recordStockMovement(item.productId, double.parse(controller.text), type, auth);
+                if (success) Navigator.pop(context);
+              }
             },
-            child: Text('Save'),
+            child: Text('Confirm'),
           ),
         ],
       ),
