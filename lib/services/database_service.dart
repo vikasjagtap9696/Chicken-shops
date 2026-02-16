@@ -8,7 +8,8 @@ import '../models/user_model.dart';
 import 'auth_service.dart';
 
 class DatabaseService extends ChangeNotifier {
-  static const String baseUrl = 'http://192.168.1.8:5000/api';
+  static const String serverIp = '172.20.10.7'; // Central variable for IP
+  static const String baseUrl = 'http://$serverIp:5000/api';
   
   List<StockModel> _stocks = [];
   List<SaleModel> _sales = [];
@@ -90,6 +91,26 @@ class DatabaseService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> recordStockMovement(String productId, double quantity, String type, AuthService auth) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/stock'),
+        headers: auth.getAuthHeaders(),
+        body: json.encode({
+          'productId': productId,
+          'quantity': quantity,
+          'type': type,
+          'date': DateTime.now().toIso8601String().split('T')[0]
+        }),
+      );
+      if (response.statusCode == 201) {
+        await fetchStocks(auth);
+        return true;
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+
   Future<void> fetchRevenueSummary(AuthService auth) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/reports/revenue-summary'), headers: auth.getAuthHeaders());
@@ -149,7 +170,7 @@ class DatabaseService extends ChangeNotifier {
           'phone': customer.phone.isEmpty ? null : customer.phone, 
           'email': customer.email?.isEmpty ?? true ? null : customer.email, 
           'address': customer.address?.isEmpty ?? true ? null : customer.address,
-          'creditBalance': customer.advanceBalance, // Make sure this matches backend model field
+          'creditBalance': customer.advanceBalance, 
           'nextPaymentDate': customer.nextPaymentDate?.toIso8601String().split('T')[0]
         })
       );
@@ -223,25 +244,5 @@ class DatabaseService extends ChangeNotifier {
     final res = await http.delete(Uri.parse('$baseUrl/products/$id'), headers: auth.getAuthHeaders());
     if (res.statusCode == 200) { _stocks.removeWhere((s) => s.productId == id); notifyListeners(); return true; }
     return false;
-  }
-
-  Future<bool> recordStockMovement(String productId, double quantity, String type, AuthService auth) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/stock'),
-        headers: auth.getAuthHeaders(),
-        body: json.encode({
-          'productId': productId,
-          'quantity': quantity,
-          'type': type,
-          'date': DateTime.now().toIso8601String().split('T')[0]
-        }),
-      );
-      if (response.statusCode == 201) {
-        await fetchStocks(auth);
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
   }
 }

@@ -11,69 +11,37 @@ class SalesScreen extends StatefulWidget {
 }
 
 class _SalesScreenState extends State<SalesScreen> {
-  String _selectedPeriod = 'Daily';
+  String _selectedFilter = 'All'; // All, Cash, Online, Credit
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: Text('Sales Report'),
-        backgroundColor: Color(0xFF2196F3),
+        title: Text('Sales Report', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        backgroundColor: Color(0xFFE64A19),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Consumer<DatabaseService>(
         builder: (context, db, child) {
+          final filteredSales = _selectedFilter == 'All' 
+              ? db.sales 
+              : db.sales.where((s) => s.paymentMode.toLowerCase() == _selectedFilter.toLowerCase()).toList();
+
+          double totalFilteredSales = filteredSales.fold(0, (sum, item) => sum + item.grandTotal);
+
           return Column(
             children: [
-              // Period Selector
-              Container(
-                padding: EdgeInsets.all(16),
-                color: Colors.white,
-                child: Row(
-                  children: [
-                    Expanded(child: _buildPeriodButton('Daily')),
-                    Expanded(child: _buildPeriodButton('Weekly')),
-                    Expanded(child: _buildPeriodButton('Monthly')),
-                  ],
-                ),
-              ),
-
-              // Summary Cards
-              Container(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildSummaryCard(
-                        'Total Sales',
-                        '₹ ${db.todaySales.toStringAsFixed(0)}',
-                        Icons.trending_up,
-                        Colors.blue,
-                      ),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: _buildSummaryCard(
-                        'Total Profit',
-                        '₹ ${db.todayProfit.toStringAsFixed(0)}',
-                        Icons.account_balance_wallet,
-                        Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Recent Sales
+              _buildFilterBar(),
+              _buildSummaryHeader(totalFilteredSales),
               Expanded(
-                child: db.sales.isEmpty 
-                  ? Center(child: Text('No sales records found'))
+                child: filteredSales.isEmpty 
+                  ? _buildEmptyState()
                   : ListView.builder(
-                      padding: EdgeInsets.all(16),
-                      itemCount: db.sales.length,
-                      itemBuilder: (context, index) {
-                        final sale = db.sales[index];
-                        return _buildSaleCard(sale);
-                      },
+                      padding: EdgeInsets.all(12),
+                      itemCount: filteredSales.length,
+                      itemBuilder: (context, index) => _buildSaleCard(filteredSales[index]),
                     ),
               ),
             ],
@@ -83,54 +51,60 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  Widget _buildPeriodButton(String title) {
-    bool isSelected = _selectedPeriod == title;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedPeriod = title),
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        margin: EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? Color(0xFF2196F3) : Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: GoogleFonts.poppins(
-              color: isSelected ? Colors.white : Colors.black,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+  Widget _buildFilterBar() {
+    return Container(
+      height: 60,
+      color: Color(0xFFE64A19),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        children: ['All', 'Cash', 'Online', 'Credit'].map((filter) {
+          bool isSelected = _selectedFilter == filter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text(filter, style: TextStyle(color: isSelected ? Colors.orange : Colors.white, fontSize: 12)),
+              selected: isSelected,
+              onSelected: (val) => setState(() => _selectedFilter = filter),
+              selectedColor: Colors.white,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              showCheckmark: false,
             ),
-          ),
-        ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryHeader(double total) {
     return Container(
-      padding: EdgeInsets.all(16),
+      width: double.infinity,
+      padding: EdgeInsets.all(20),
+      margin: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: color.withOpacity(0.1), blurRadius: 10, offset: Offset(0, 5)),
-        ],
+        gradient: LinearGradient(colors: [Color(0xFFE64A19), Color(0xFFFF7043)]),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 8)],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          SizedBox(height: 12),
-          Text(value, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(title, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+          Text('TOTAL SALES ($_selectedFilter)', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+          SizedBox(height: 4),
+          Text('₹ ${total.toStringAsFixed(2)}', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons. analytics_outlined, size: 80, color: Colors.grey[300]),
+          SizedBox(height: 16),
+          Text('No sales records for $_selectedFilter', style: TextStyle(color: Colors.grey)),
         ],
       ),
     );
@@ -139,61 +113,40 @@ class _SalesScreenState extends State<SalesScreen> {
   Widget _buildSaleCard(SaleModel sale) {
     return Card(
       margin: EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        contentPadding: EdgeInsets.all(16),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(sale.customerName ?? 'Walk-in', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('₹${sale.grandTotal.toStringAsFixed(0)}', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(sale.billNumber, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    sale.paymentMode.toUpperCase(),
-                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
+            SizedBox(height: 4),
+            Text(DateFormat('dd MMM yyyy • hh:mm a').format(sale.createdAt), style: TextStyle(fontSize: 11)),
             SizedBox(height: 8),
-            Text('Customer: ${sale.customerName}', style: GoogleFonts.poppins(fontSize: 14)),
-            Text(
-              'Date: ${DateFormat('dd/MM/yyyy hh:mm a').format(sale.createdAt)}',
-              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
-            ),
-            SizedBox(height: 12),
-            ...sale.items.map((item) => Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.shopping_bag_outlined, size: 18, color: Colors.blue),
-                  SizedBox(width: 12),
-                  Expanded(child: Text(item.productName, style: GoogleFonts.poppins(fontSize: 14))),
-                  Text('${item.quantity}', style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[600])),
-                  SizedBox(width: 12),
-                  Text('₹${item.total}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF2196F3))),
-                ],
-              ),
-            )).toList(),
-            Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 8,
               children: [
-                Text('Total:', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('₹${sale.grandTotal}', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2196F3))),
+                _buildBadge(sale.paymentMode.toUpperCase(), Colors.blue),
+                _buildBadge('Order #${sale.billNumber}', Colors.grey),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBadge(String label, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+      child: Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
     );
   }
 }

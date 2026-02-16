@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
 class AuthService extends ChangeNotifier {
-  static const String baseUrl = 'http://192.168.1.8:5000/api';
+  static const String serverIp = '172.20.10.7'; // Central variable for IP
+  static const String baseUrl = 'http://$serverIp:5000/api';
   
   UserModel? _currentUser;
   String? _token;
