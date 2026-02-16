@@ -30,7 +30,6 @@ class DatabaseService extends ChangeNotifier {
   double get totalStockValue => _stocks.fold(0, (sum, item) => sum + (item.currentStock * item.pricePerUnit));
   bool get isLoading => _isLoading;
 
-  // Added missing fetchSales method
   Future<void> fetchSales(AuthService auth) async {
     await fetchDailySales(auth);
   }
@@ -44,9 +43,7 @@ class DatabaseService extends ChangeNotifier {
         final List<dynamic> data = json.decode(response.body)['data'];
         _sales = data.map((json) => SaleModel.fromJson(json)).toList();
       }
-    } catch (e) {
-      debugPrint('Fetch All Orders Error: $e');
-    }
+    } catch (e) {}
     _isLoading = false;
     notifyListeners();
   }
@@ -93,26 +90,6 @@ class DatabaseService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> recordStockMovement(String productId, double quantity, String type, AuthService auth) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/stock'),
-        headers: auth.getAuthHeaders(),
-        body: json.encode({
-          'productId': productId,
-          'quantity': quantity,
-          'type': type,
-          'date': DateTime.now().toIso8601String().split('T')[0]
-        }),
-      );
-      if (response.statusCode == 201) {
-        await fetchStocks(auth);
-        return true;
-      }
-      return false;
-    } catch (e) { return false; }
-  }
-
   Future<void> fetchRevenueSummary(AuthService auth) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/reports/revenue-summary'), headers: auth.getAuthHeaders());
@@ -144,9 +121,9 @@ class DatabaseService extends ChangeNotifier {
         headers: auth.getAuthHeaders(), 
         body: json.encode({
           'name': customer.name, 
-          'phone': customer.phone.trim().isEmpty ? null : customer.phone.trim(), 
-          'email': customer.email?.trim().isEmpty ?? true ? null : customer.email?.trim(), 
-          'address': customer.address?.trim().isEmpty ?? true ? null : customer.address?.trim()
+          'phone': customer.phone.isEmpty ? null : customer.phone, 
+          'email': customer.email?.isEmpty ?? true ? null : customer.email, 
+          'address': customer.address?.isEmpty ?? true ? null : customer.address
         })
       );
       
@@ -158,10 +135,7 @@ class DatabaseService extends ChangeNotifier {
         _lastError = responseData['message'] ?? 'Failed to add customer';
         return false;
       }
-    } catch (e) { 
-      _lastError = "Connection Error";
-      return false; 
-    }
+    } catch (e) { return false; }
   }
 
   Future<bool> updateCustomer(CustomerModel customer, AuthService auth) async {
@@ -172,26 +146,23 @@ class DatabaseService extends ChangeNotifier {
         headers: auth.getAuthHeaders(), 
         body: json.encode({
           'name': customer.name, 
-          'phone': customer.phone.trim().isEmpty ? null : customer.phone.trim(), 
-          'email': customer.email?.trim().isEmpty ?? true ? null : customer.email?.trim(), 
-          'address': customer.address?.trim().isEmpty ?? true ? null : customer.address?.trim(),
-          'creditBalance': customer.advanceBalance,
+          'phone': customer.phone.isEmpty ? null : customer.phone, 
+          'email': customer.email?.isEmpty ?? true ? null : customer.email, 
+          'address': customer.address?.isEmpty ?? true ? null : customer.address,
+          'creditBalance': customer.advanceBalance, // Make sure this matches backend model field
           'nextPaymentDate': customer.nextPaymentDate?.toIso8601String().split('T')[0]
         })
       );
       
-      final responseData = json.decode(response.body);
       if (response.statusCode == 200) { 
         await fetchCustomers(auth); 
         return true; 
       } else {
+        final responseData = json.decode(response.body);
         _lastError = responseData['message'] ?? 'Failed to update customer';
         return false;
       }
-    } catch (e) { 
-      _lastError = "Connection Error";
-      return false; 
-    }
+    } catch (e) { return false; }
   }
 
   Future<bool> deleteCustomer(String id, AuthService auth) async {
@@ -252,5 +223,25 @@ class DatabaseService extends ChangeNotifier {
     final res = await http.delete(Uri.parse('$baseUrl/products/$id'), headers: auth.getAuthHeaders());
     if (res.statusCode == 200) { _stocks.removeWhere((s) => s.productId == id); notifyListeners(); return true; }
     return false;
+  }
+
+  Future<bool> recordStockMovement(String productId, double quantity, String type, AuthService auth) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/stock'),
+        headers: auth.getAuthHeaders(),
+        body: json.encode({
+          'productId': productId,
+          'quantity': quantity,
+          'type': type,
+          'date': DateTime.now().toIso8601String().split('T')[0]
+        }),
+      );
+      if (response.statusCode == 201) {
+        await fetchStocks(auth);
+        return true;
+      }
+      return false;
+    } catch (e) { return false; }
   }
 }
