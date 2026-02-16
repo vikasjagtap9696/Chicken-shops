@@ -12,6 +12,7 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen> {
   final TextEditingController _searchController = TextEditingController();
+  String _selectedCategory = 'All';
 
   @override
   void initState() {
@@ -28,9 +29,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final db = Provider.of<DatabaseService>(context);
 
     return Scaffold(
+      backgroundColor: Color(0xFFF8F9FA),
       appBar: AppBar(
         title: Text('Inventory Management', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blueGrey,
+        backgroundColor: Colors.blueGrey[800],
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(icon: Icon(Icons.refresh), onPressed: () => db.fetchStocks(auth)),
           IconButton(
@@ -41,54 +45,112 @@ class _InventoryScreenState extends State<InventoryScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search products...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onChanged: (v) => setState(() {}),
-            ),
-          ),
+          _buildSearchAndFilter(db),
           Expanded(
             child: db.isLoading
                 ? Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    itemCount: db.stocks.length,
-                    itemBuilder: (context, index) {
-                      final item = db.stocks[index];
-                      if (_searchController.text.isNotEmpty && !item.productName.toLowerCase().contains(_searchController.text.toLowerCase())) {
-                        return SizedBox.shrink();
-                      }
-                      return _buildProductCard(item, db, auth);
-                    },
-                  ),
+                : _buildProductList(db, auth),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildSearchAndFilter(DatabaseService db) {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey[800],
+        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          TextField(
+            controller: _searchController,
+            style: TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Search products...',
+              hintStyle: TextStyle(color: Colors.white70),
+              prefixIcon: Icon(Icons.search, color: Colors.white70),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.1),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (v) => setState(() {}),
+          ),
+          SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['All', 'chicken', 'mutton', 'egg', 'fish', 'other'].map((cat) {
+                bool isSelected = _selectedCategory == cat;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ChoiceChip(
+                    label: Text(cat.toUpperCase(), style: TextStyle(fontSize: 10, color: isSelected ? Colors.white : Colors.black87)),
+                    selected: isSelected,
+                    onSelected: (val) => setState(() => _selectedCategory = cat),
+                    selectedColor: Colors.orangeAccent,
+                    backgroundColor: Colors.white,
+                  ),
+                );
+              }).toList(),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductList(DatabaseService db, AuthService auth) {
+    final query = _searchController.text.toLowerCase();
+    final filtered = db.stocks.where((item) {
+      final matchesSearch = item.productName.toLowerCase().contains(query);
+      final matchesCat = _selectedCategory == 'All' || item.category.toLowerCase() == _selectedCategory.toLowerCase();
+      return matchesSearch && matchesCat;
+    }).toList();
+
+    if (filtered.isEmpty) return Center(child: Text('No products found.'));
+
+    return ListView.builder(
+      padding: EdgeInsets.all(12),
+      itemCount: filtered.length,
+      itemBuilder: (context, index) {
+        return _buildProductCard(filtered[index], db, auth);
+      },
+    );
+  }
+
   Widget _buildProductCard(StockModel item, DatabaseService db, AuthService auth) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: ListTile(
-        leading: Text(item.emoji, style: TextStyle(fontSize: 32)),
-        title: Text(item.productName, style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('Price: ₹${item.pricePerUnit} | Unit: ${item.unit}'),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          padding: EdgeInsets.all(10),
+          decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+          child: Text(item.emoji, style: TextStyle(fontSize: 24)),
+        ),
+        title: Text(item.productName, style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Price: ₹${item.pricePerUnit} / ${item.unit}', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+            Text('Category: ${item.category.toUpperCase()}', style: TextStyle(fontSize: 10, color: Colors.grey)),
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(Icons.edit, color: Colors.blue),
+              icon: Icon(Icons.edit_note, color: Colors.blue),
               onPressed: () => _showProductDialog(context, auth, db, stock: item),
             ),
             IconButton(
-              icon: Icon(Icons.delete, color: Colors.red),
+              icon: Icon(Icons.delete_sweep_outlined, color: Colors.red),
               onPressed: () => _showDeleteConfirm(context, auth, db, item.productId),
             ),
           ],
@@ -107,23 +169,27 @@ class _InventoryScreenState extends State<InventoryScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(stock == null ? 'Add New Product' : 'Edit Product'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameController, decoration: InputDecoration(labelText: 'Product Name')),
-              TextField(controller: priceController, decoration: InputDecoration(labelText: 'Price Per Unit'), keyboardType: TextInputType.number),
+              TextField(controller: nameController, decoration: InputDecoration(labelText: 'Product Name', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+              SizedBox(height: 15),
+              TextField(controller: priceController, decoration: InputDecoration(labelText: 'Price Per Unit', prefixText: '₹ ', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), keyboardType: TextInputType.number),
+              SizedBox(height: 15),
               DropdownButtonFormField<String>(
                 value: category,
                 items: ['chicken', 'mutton', 'egg', 'fish', 'other'].map((c) => DropdownMenuItem(value: c, child: Text(c.toUpperCase()))).toList(),
                 onChanged: (val) => category = val!,
-                decoration: InputDecoration(labelText: 'Category'),
+                decoration: InputDecoration(labelText: 'Category', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
+              SizedBox(height: 15),
               DropdownButtonFormField<String>(
                 value: unit,
                 items: ['kg', 'piece', 'dozen'].map((u) => DropdownMenuItem(value: u, child: Text(u.toUpperCase()))).toList(),
                 onChanged: (val) => unit = val!,
-                decoration: InputDecoration(labelText: 'Unit'),
+                decoration: InputDecoration(labelText: 'Unit', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
             ],
           ),
@@ -146,7 +212,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
               }
               if (success) Navigator.pop(context);
             },
-            child: Text('Save'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: Text('Save Product', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -158,7 +225,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Delete Product?'),
-        content: Text('This will permanently remove the product.'),
+        content: Text('This will permanently remove the product from your inventory.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('No')),
           ElevatedButton(

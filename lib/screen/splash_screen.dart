@@ -29,35 +29,41 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _controller.forward();
-    _checkAuth();
+    _navigateToNext();
   }
 
-  void _checkAuth() {
-    // वेळ कमी केला जेणेकरून ॲप लवकर सुरू होईल
-    Timer(Duration(seconds: 2), () {
-      if (!mounted) return;
-      final auth = Provider.of<AuthService>(context, listen: false);
-      
-      if (auth.isAuthenticated) {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, anim1, anim2) => DashboardScreen(),
-            transitionsBuilder: (context, anim1, anim2, child) => FadeTransition(opacity: anim1, child: child),
-            transitionDuration: Duration(milliseconds: 500),
-          ),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, anim1, anim2) => LoginScreen(),
-            transitionsBuilder: (context, anim1, anim2, child) => FadeTransition(opacity: anim1, child: child),
-            transitionDuration: Duration(milliseconds: 500),
-          ),
-        );
-      }
-    });
+  Future<void> _navigateToNext() async {
+    // SharedPreferences लोड होईपर्यंत थांबणे आवश्यक आहे
+    final auth = Provider.of<AuthService>(context, listen: false);
+    
+    // जोपर्यंत AuthService initialized होत नाही तोपर्यंत थोडा वेळ थांबणे
+    int retryCount = 0;
+    while (!auth.isInitialized && retryCount < 10) {
+      await Future.delayed(Duration(milliseconds: 200));
+      retryCount++;
+    }
+
+    if (!mounted) return;
+
+    if (auth.isAuthenticated) {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, anim1, anim2) => DashboardScreen(),
+          transitionsBuilder: (context, anim1, anim2, child) => FadeTransition(opacity: anim1, child: child),
+          transitionDuration: Duration(milliseconds: 500),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, anim1, anim2) => LoginScreen(),
+          transitionsBuilder: (context, anim1, anim2, child) => FadeTransition(opacity: anim1, child: child),
+          transitionDuration: Duration(milliseconds: 500),
+        ),
+      );
+    }
   }
 
   @override
@@ -80,8 +86,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 'assets/logo.png',
                 width: 180,
                 height: 180,
-                // इमेज लोड न झाल्यास एरर टाळण्यासाठी
-                errorBuilder: (context, error, stackTrace) => Icon(Icons.shopping_cart, size: 100, color: Colors.orange),
+                errorBuilder: (context, error, stackTrace) => Icon(Icons.shopping_cart, size: 100, color: Color(0xFFE64A19)),
               ),
             ),
             SizedBox(height: 24),
