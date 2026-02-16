@@ -136,7 +136,6 @@ class _BillingScreenState extends State<BillingScreen> {
   void _showAddCustomerDialog(BuildContext context, AuthService auth, DatabaseService db) {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
-    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -153,18 +152,10 @@ class _BillingScreenState extends State<BillingScreen> {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.isNotEmpty && phoneController.text.isNotEmpty) {
-                final newCustomer = CustomerModel(
-                  id: '',
-                  name: nameController.text,
-                  phone: phoneController.text,
-                  createdAt: DateTime.now(),
-                );
+                final newCustomer = CustomerModel(id: '', name: nameController.text, phone: phoneController.text, createdAt: DateTime.now());
                 bool success = await db.addCustomer(newCustomer, auth);
                 if (success) {
-                  setState(() {
-                    selectedCustomer = newCustomer;
-                    _customerSearchController.text = newCustomer.name;
-                  });
+                  setState(() { selectedCustomer = newCustomer; _customerSearchController.text = newCustomer.name; });
                   Navigator.pop(context);
                 }
               }
@@ -179,7 +170,7 @@ class _BillingScreenState extends State<BillingScreen> {
   Widget _buildCustomerSearchResults(List<CustomerModel> results) {
     return Container(
       margin: EdgeInsets.only(top: 8),
-      constraints: BoxConstraints(maxHeight: 200),
+      constraints: BoxConstraints(maxHeight: 150),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)]),
       child: results.isEmpty 
         ? ListTile(title: Text('Not Found'))
@@ -193,11 +184,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 title: Text(c.name, style: TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text('Bal: ₹${c.advanceBalance.toStringAsFixed(0)} | ${c.phone}', style: TextStyle(fontSize: 11)),
                 onTap: () {
-                  setState(() {
-                    selectedCustomer = c;
-                    _customerSearchController.text = c.name;
-                    _showCustomerResults = false;
-                  });
+                  setState(() { selectedCustomer = c; _customerSearchController.text = c.name; _showCustomerResults = false; });
                 },
               );
             },
@@ -212,10 +199,7 @@ class _BillingScreenState extends State<BillingScreen> {
     return GridView.builder(
       padding: EdgeInsets.all(16),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.85,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+        crossAxisCount: 3, childAspectRatio: 0.85, crossAxisSpacing: 10, mainAxisSpacing: 10,
       ),
       itemCount: results.length,
       itemBuilder: (context, index) {
@@ -240,17 +224,11 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Widget _buildBottomCheckout(DatabaseService db, AuthService auth) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15)],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30)), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15)]),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (cartItems.isNotEmpty)
-            _buildCartPreview(),
-          
+          if (cartItems.isNotEmpty) _buildCartPreview(),
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -262,22 +240,28 @@ class _BillingScreenState extends State<BillingScreen> {
                     Text('₹${grandTotal.toStringAsFixed(2)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
                   ],
                 ),
+                if (balanceAmount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Remaining (Udhari)', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      Text('₹${balanceAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red)),
+                    ],
+                  ),
+                ),
                 SizedBox(height: 15),
                 _buildPaymentOptions(),
                 SizedBox(height: 15),
                 _buildReceivedAmountAndDate(),
                 SizedBox(height: 20),
                 SizedBox(
-                  width: double.infinity,
-                  height: 55,
+                  width: double.infinity, height: 55,
                   child: ElevatedButton(
-                    onPressed: cartItems.isEmpty ? null : () => _placeOrder(db, auth),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF2E7D32),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                      elevation: 0,
-                    ),
-                    child: Text('Confirm & Print Bill', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    onPressed: cartItems.isEmpty ? null : () => _handlePlaceOrder(db, auth),
+                    style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF2E7D32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), elevation: 0),
+                    child: Text('Confirm Order', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -290,31 +274,34 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Widget _buildCartPreview() {
     return Container(
-      constraints: BoxConstraints(maxHeight: 120),
+      constraints: BoxConstraints(maxHeight: 150),
       padding: EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
       child: ListView.builder(
-        shrinkWrap: true,
-        padding: EdgeInsets.symmetric(horizontal: 16),
+        shrinkWrap: true, padding: EdgeInsets.symmetric(horizontal: 16),
         itemCount: cartItems.length,
         itemBuilder: (context, index) {
           final item = cartItems[index];
           return Container(
             margin: EdgeInsets.only(bottom: 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('${item['name']} x ${item['quantity']}', style: TextStyle(fontWeight: FontWeight.w600)),
-                Row(
-                  children: [
-                    Text('₹${(item['price'] * item['quantity']).toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold)),
-                    SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: () => setState(() => cartItems.removeAt(index)),
-                      child: Icon(Icons.remove_circle, color: Colors.red, size: 20),
-                    )
-                  ],
+                Expanded(child: Text('${item['name']}', style: TextStyle(fontWeight: FontWeight.w600))),
+                SizedBox(
+                  width: 60, height: 35,
+                  child: TextField(
+                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(4), border: OutlineInputBorder()),
+                    onChanged: (val) => setState(() => item['quantity'] = double.tryParse(val) ?? 0.0),
+                    controller: TextEditingController(text: item['quantity'].toString()),
+                  ),
                 ),
+                SizedBox(width: 8),
+                Text('x ₹${item['price']}', style: TextStyle(fontSize: 12)),
+                SizedBox(width: 10),
+                Text('₹${(item['price'] * item['quantity']).toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                IconButton(icon: Icon(Icons.remove_circle, color: Colors.red, size: 20), onPressed: () => setState(() => cartItems.removeAt(index))),
               ],
             ),
           );
@@ -329,7 +316,6 @@ class _BillingScreenState extends State<BillingScreen> {
         _paymentButton('cash', Icons.payments, Colors.green),
         SizedBox(width: 10),
         _paymentButton('online', Icons.qr_code, Colors.blue),
-        SizedBox(width: 10),
         _paymentButton('credit', Icons.history, Colors.orange),
       ],
     );
@@ -341,25 +327,12 @@ class _BillingScreenState extends State<BillingScreen> {
       child: InkWell(
         onTap: () => setState(() {
           paymentMethod = mode;
-          if (mode == 'credit') {
-            amountReceived = 0;
-            _amountReceivedController.text = "0";
-          }
+          if (mode == 'credit') { amountReceived = 0; _amountReceivedController.text = "0"; }
         }),
         child: Container(
           padding: EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? color : Colors.white,
-            border: Border.all(color: selected ? color : Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, size: 20, color: selected ? Colors.white : color),
-              SizedBox(height: 4),
-              Text(mode.toUpperCase(), style: TextStyle(fontSize: 10, color: selected ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-            ],
-          ),
+          decoration: BoxDecoration(color: selected ? color : Colors.white, border: Border.all(color: selected ? color : Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+          child: Column(children: [Icon(icon, size: 20, color: selected ? Colors.white : color), SizedBox(height: 4), Text(mode.toUpperCase(), style: TextStyle(fontSize: 10, color: selected ? Colors.white : Colors.black, fontWeight: FontWeight.bold))]),
         ),
       ),
     );
@@ -373,13 +346,7 @@ class _BillingScreenState extends State<BillingScreen> {
           child: TextField(
             controller: _amountReceivedController,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Amt Paid',
-              prefixText: '₹ ',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              filled: true,
-              fillColor: Colors.grey.shade50,
-            ),
+            decoration: InputDecoration(labelText: 'Amt Paid', prefixText: '₹ ', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey.shade50),
             onChanged: (v) => setState(() => amountReceived = double.tryParse(v) ?? 0.0),
           ),
         ),
@@ -391,12 +358,7 @@ class _BillingScreenState extends State<BillingScreen> {
               onPressed: _selectNextPaymentDate,
               icon: Icon(Icons.calendar_month, size: 18),
               label: Text(nextPaymentDate == null ? 'SET DATE' : DateFormat('dd MMM').format(nextPaymentDate!)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: nextPaymentDate != null ? Colors.green : Colors.orange,
-                side: BorderSide(color: nextPaymentDate != null ? Colors.green : Colors.orange),
-                padding: EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+              style: OutlinedButton.styleFrom(foregroundColor: nextPaymentDate != null ? Colors.green : Colors.orange, side: BorderSide(color: nextPaymentDate != null ? Colors.green : Colors.orange), padding: EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             ),
           ),
         ]
@@ -405,45 +367,49 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   Future<void> _selectNextPaymentDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now().add(Duration(days: 7)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(Duration(days: 365)),
-    );
+    final DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now().add(Duration(days: 7)), firstDate: DateTime.now(), lastDate: DateTime.now().add(Duration(days: 365)));
     if (picked != null) setState(() => nextPaymentDate = picked);
   }
 
   void _addToCart(StockModel product) {
     setState(() {
       int idx = cartItems.indexWhere((item) => item['productId'] == product.productId);
-      if (idx != -1) {
-        cartItems[idx]['quantity'] += 0.5; 
-      } else {
-        cartItems.add({'productId': product.productId, 'name': product.productName, 'price': product.pricePerUnit, 'quantity': 1.0, 'unit': product.unit});
-      }
+      if (idx != -1) { cartItems[idx]['quantity'] += 0.5; } 
+      else { cartItems.add({'productId': product.productId, 'name': product.productName, 'price': product.pricePerUnit, 'quantity': 1.0, 'unit': product.unit}); }
     });
   }
 
-  Future<void> _placeOrder(DatabaseService db, AuthService auth) async {
-    final orderData = {
-      "customerId": selectedCustomer?.id,
-      "items": cartItems.map((item) => {"productId": int.parse(item['productId']), "quantity": item['quantity']}).toList(),
-      "paymentMethod": paymentMethod,
-      "amountPaid": amountReceived,
-      "totalAmount": grandTotal,
-      "nextPaymentDate": nextPaymentDate?.toIso8601String(),
-    };
-    bool success = await db.createSale(orderData, auth);
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bill Generated!'), backgroundColor: Colors.green));
-      setState(() {
-        cartItems.clear();
-        selectedCustomer = null;
-        _customerSearchController.clear();
-        _amountReceivedController.clear();
-        nextPaymentDate = null;
-      });
+  void _handlePlaceOrder(DatabaseService db, AuthService auth) async {
+    if (cartItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please add items to cart'), backgroundColor: Colors.red));
+      return;
+    }
+    if (balanceAmount > 0 && selectedCustomer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select a customer for Credit order'), backgroundColor: Colors.red));
+      return;
+    }
+
+    bool? confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Order?'),
+        content: Text('Total Bill: ₹${grandTotal.toStringAsFixed(2)}\nMode: ${paymentMethod.toUpperCase()}\nPending: ₹${balanceAmount.toStringAsFixed(2)}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('No')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text('Yes')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final orderData = {"customerId": selectedCustomer?.id, "items": cartItems.map((item) => {"productId": int.parse(item['productId']), "quantity": item['quantity']}).toList(), "paymentMethod": paymentMethod, "amountPaid": amountReceived, "totalAmount": grandTotal, "nextPaymentDate": nextPaymentDate?.toIso8601String()};
+      bool success = await db.createSale(orderData, auth);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bill Generated!'), backgroundColor: Colors.green));
+        setState(() { cartItems.clear(); selectedCustomer = null; _customerSearchController.clear(); _amountReceivedController.clear(); nextPaymentDate = null; });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating bill'), backgroundColor: Colors.red));
+      }
     }
   }
 }

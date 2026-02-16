@@ -18,6 +18,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Contact> _contacts = [];
   bool _isPermissionGranted = false;
+  String _currentFilter = 'All'; // 'All', 'Pending'
 
   @override
   void initState() {
@@ -65,6 +66,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
         backgroundColor: Color(0xFF3F51B5),
         elevation: 0,
         actions: [
+          _buildFilterMenu(),
           IconButton(
             icon: Icon(Icons.add_circle_outline),
             onPressed: () => _showCustomerDialog(context, auth, db),
@@ -74,6 +76,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
+          _buildFilterChips(),
           Expanded(
             child: db.isLoading
                 ? Center(child: CircularProgressIndicator())
@@ -84,12 +87,52 @@ class _CustomerScreenState extends State<CustomerScreen> {
     );
   }
 
+  Widget _buildFilterMenu() {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.filter_list),
+      onSelected: (value) => setState(() => _currentFilter = value),
+      itemBuilder: (context) => [
+        PopupMenuItem(value: 'All', child: Text('All Customers')),
+        PopupMenuItem(value: 'Pending', child: Text('Pending Payments')),
+      ],
+    );
+  }
+
+  Widget _buildFilterChips() {
+    return Container(
+      height: 50,
+      padding: EdgeInsets.symmetric(horizontal: 16),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _filterChip('All'),
+          _filterChip('Pending'),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label) {
+    bool isSelected = _currentFilter == label;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (selected) {
+          if (selected) setState(() => _currentFilter = label);
+        },
+        selectedColor: Color(0xFF3F51B5),
+        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
+      ),
+    );
+  }
+
   Widget _buildSearchBar() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
       decoration: BoxDecoration(
         color: Color(0xFF3F51B5),
-        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
       ),
       child: TextField(
         controller: _searchController,
@@ -113,43 +156,39 @@ class _CustomerScreenState extends State<CustomerScreen> {
   Widget _buildFullCustomerList(DatabaseService db, AuthService auth) {
     final query = _searchController.text.toLowerCase();
     
-    // Filter database customers
-    List<CustomerModel> dbCustomers = db.customers.where((c) => 
-      c.name.toLowerCase().contains(query) || c.phone.contains(query)
-    ).toList();
+    // Filter database customers based on search and selected filter
+    List<CustomerModel> dbCustomers = db.customers.where((c) {
+      final matchesSearch = c.name.toLowerCase().contains(query) || c.phone.contains(query);
+      if (!matchesSearch) return false;
 
-    // Separate customers who have an upcoming payment date (Remaining Balance)
-    List<CustomerModel> urgentCustomers = dbCustomers.where((c) => 
-      c.advanceBalance > 0 && c.nextPaymentDate != null
-    ).toList();
+      if (_currentFilter == 'Pending') return c.advanceBalance > 0;
+      return true;
+    }).toList();
 
-    // Sort urgent customers by date (closest date first)
-    urgentCustomers.sort((a, b) => a.nextPaymentDate!.compareTo(b.nextPaymentDate!));
+    // Sorting Logic: Customers with pending payments and nearest due dates on top
+    dbCustomers.sort((a, b) {
+      // First priority: Balance > 0
+      if (a.advanceBalance > 0 && b.advanceBalance <= 0) return -1;
+      if (a.advanceBalance <= 0 && b.advanceBalance > 0) return 1;
 
-    // Remaining customers
-    List<CustomerModel> otherCustomers = dbCustomers.where((c) => 
-      !urgentCustomers.contains(c)
-    ).toList();
+      // Second priority: Due Date (closest first)
+      if (a.nextPaymentDate != null && b.nextPaymentDate != null) {
+        return a.nextPaymentDate!.compareTo(b.nextPaymentDate!);
+      }
+      if (a.nextPaymentDate != null && b.nextPaymentDate == null) return -1;
+      if (a.nextPaymentDate == null && b.nextPaymentDate != null) return 1;
 
-    return ListView(
+      return 0;
+    });
+
+    return ListView.builder(
       padding: EdgeInsets.all(16),
-      children: [
-        if (urgentCustomers.isNotEmpty) ...[
-          _buildSectionHeader('Pending Payments (Upcoming)', Colors.orange.shade900),
-          ...urgentCustomers.map((c) => _buildCustomerCard(c, auth, db, isUrgent: true)),
-          SizedBox(height: 16),
-        ],
-        
-        if (otherCustomers.isNotEmpty) ...[
-          _buildSectionHeader('All Customers', Color(0xFF3F51B5)),
-          ...otherCustomers.map((c) => _buildCustomerCard(c, auth, db)),
-        ],
-
-        // Show phone contacts if searching
-        if (_searchController.text.isNotEmpty) ...[
-          _buildSearchResults(db, auth),
-        ],
-      ],
+      itemCount: dbCustomers.length,
+      itemBuilder: (context, index) {
+        final customer = dbCustomers[index];
+        bool isUrgent = customer.advanceBalance > 0 && customer.nextPaymentDate != null;
+        return _buildCustomerCard(customer, auth, db, isUrgent: isUrgent);
+      },
     );
   }
 
@@ -169,7 +208,15 @@ class _CustomerScreenState extends State<CustomerScreen> {
           child: Text(customer.name[0].toUpperCase(), 
             style: TextStyle(color: hasBalance ? Colors.red : Colors.green, fontWeight: FontWeight.bold)),
         ),
-        title: Text(customer.name, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+        title: Row(
+          children: [
+            Expanded(child: Text(customer.name, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16))),
+            IconButton(
+              icon: Icon(Icons.delete_outline, color: Colors.red, size: 20),
+              onPressed: () => _showDeleteConfirm(customer.id, auth, db),
+            ),
+          ],
+        ),
         subtitle: Row(
           children: [
             Icon(Icons.phone, size: 14, color: Colors.grey),
@@ -226,6 +273,27 @@ class _CustomerScreenState extends State<CustomerScreen> {
   }
 
   // --- Support Methods ---
+  void _showDeleteConfirm(String id, AuthService auth, DatabaseService db) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Customer?'),
+        content: Text('Are you sure you want to remove this customer?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              bool success = await db.deleteCustomer(id, auth);
+              if (success) Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _updatePaymentDate(CustomerModel customer, AuthService auth, DatabaseService db) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -315,36 +383,6 @@ class _CustomerScreenState extends State<CustomerScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSearchResults(DatabaseService db, AuthService auth) {
-    final query = _searchController.text.toLowerCase();
-    final contactMatches = _contacts.where((c) => c.displayName.toLowerCase().contains(query) || (c.phones.isNotEmpty && c.phones.first.number.contains(query))).toList();
-    if (contactMatches.isEmpty) return SizedBox.shrink();
-    return Column(
-      children: [
-        _buildSectionHeader('Phone Contacts', Colors.grey),
-        ...contactMatches.map((c) => _buildContactItem(c, auth, db)),
-      ],
-    );
-  }
-
-  Widget _buildContactItem(Contact contact, AuthService auth, DatabaseService db) {
-    return ListTile(
-      leading: CircleAvatar(child: Icon(Icons.person_add)),
-      title: Text(contact.displayName),
-      onTap: () async {
-        final phone = contact.phones.isNotEmpty ? contact.phones.first.number.replaceAll(RegExp(r'\D'), '') : '';
-        await db.addCustomer(CustomerModel(id: '', name: contact.displayName, phone: phone, createdAt: DateTime.now()), auth);
-      },
-    );
-  }
-
-  Widget _buildSectionHeader(String title, Color color) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14)),
     );
   }
 
