@@ -229,10 +229,26 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-          child: Center(child: Text('🍗', style: TextStyle(fontSize: 50))),
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                spreadRadius: 2,
+              )
+            ],
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              'assets/logo.png',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Center(child: Text('🍗', style: TextStyle(fontSize: 50))),
+            ),
+          ),
         ),
         SizedBox(height: 16),
         Text(

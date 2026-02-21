@@ -5,9 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
 class AuthService extends ChangeNotifier {
-  // Updated with your current IP: 192.168.1.10
-  // Make sure your Mobile and Computer are on the SAME Wi-Fi network.
-  static const String baseUrl = 'http://192.168.1.10:5000/api';
+  static const String serverIp = '172.20.10.7'; // Central variable for IP
+  static const String baseUrl = 'http://$serverIp:5000/api';
   
   UserModel? _currentUser;
   String? _token;
@@ -50,7 +49,7 @@ class AuthService extends ChangeNotifier {
           'email': trimmedEmail,
           'password': password,
         }),
-      ).timeout(const Duration(seconds: 15)); // Increased timeout for real device
+      ).timeout(const Duration(seconds: 10));
 
       final responseData = json.decode(response.body);
 
@@ -68,7 +67,7 @@ class AuthService extends ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _error = "Connection Error: Check if server is running at 192.168.1.10:5000";
+      _error = "Server connection failed: $e";
       _isLoading = false;
       notifyListeners();
       return false;
