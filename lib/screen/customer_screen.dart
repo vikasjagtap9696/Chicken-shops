@@ -275,7 +275,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
             ? IconButton(icon: const Icon(Icons.clear, color: Colors.white), onPressed: () { _searchController.clear(); setState(() {}); })
             : null,
           filled: true,
-          fillColor: Colors.white.withOpacity(0.2),
+          fillColor: Colors.white.withValues(alpha: 0.2),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         ),
         onChanged: (value) => setState(() {}),
@@ -447,7 +447,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
           ElevatedButton(
             onPressed: () async {
               bool success = await db.deleteCustomer(id, auth);
-              if (success && mounted) {
+              if (!context.mounted) return;
+              if (success) {
                 Navigator.pop(context);
               }
             },
@@ -513,7 +514,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
                 } else {
                   success = await db.updateCustomer(newCustomer, auth);
                 }
-                if (success && mounted) {
+                if (!context.mounted) return;
+                if (success) {
                   Navigator.pop(context);
                 }
               }
@@ -549,7 +551,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
                   nextPaymentDate: customer.nextPaymentDate, createdAt: customer.createdAt,
                 );
                 bool success = await db.updateCustomer(updatedCust, auth);
-                if (success && mounted) {
+                if (!context.mounted) return;
+                if (success) {
                   Navigator.pop(context);
                 }
               }

@@ -8,7 +8,8 @@ import '../models/user_model.dart';
 import 'auth_service.dart';
 
 class DatabaseService extends ChangeNotifier {
-  static const String baseUrl = 'http://192.168.1.8:5000/api';
+  // Updated with your current IP: 192.168.1.10
+  static const String baseUrl = 'http://192.168.1.10:5000/api';
   
   List<StockModel> _stocks = [];
   List<SaleModel> _sales = [];
@@ -30,7 +31,6 @@ class DatabaseService extends ChangeNotifier {
   double get totalStockValue => _stocks.fold(0, (sum, item) => sum + (item.currentStock * item.pricePerUnit));
   bool get isLoading => _isLoading;
 
-  // Added missing fetchSales method
   Future<void> fetchSales(AuthService auth) async {
     await fetchDailySales(auth);
   }
@@ -42,7 +42,7 @@ class DatabaseService extends ChangeNotifier {
       final response = await http.get(Uri.parse('$baseUrl/orders'), headers: auth.getAuthHeaders());
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body)['data'];
-        _sales = data.map((json) => SaleModel.fromJson(json)).toList();
+        _sales = data.map((item) => SaleModel.fromJson(item)).toList();
       }
     } catch (e) {
       debugPrint('Fetch All Orders Error: $e');
@@ -60,7 +60,7 @@ class DatabaseService extends ChangeNotifier {
       final response = await http.get(Uri.parse(url), headers: auth.getAuthHeaders());
       if (response.statusCode == 200) {
         final List<dynamic> ordersJson = json.decode(response.body)['data']['orders'];
-        _sales = ordersJson.map((json) => SaleModel.fromJson(json)).toList();
+        _sales = ordersJson.map((item) => SaleModel.fromJson(item)).toList();
       }
     } catch (e) {}
     _isLoading = false;
@@ -86,7 +86,7 @@ class DatabaseService extends ChangeNotifier {
       final response = await http.get(Uri.parse('$baseUrl/stock/summary'), headers: auth.getAuthHeaders());
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body)['data'];
-        _stocks = data.map((json) => StockModel.fromJson(json)).toList();
+        _stocks = data.map((item) => StockModel.fromJson(item)).toList();
       }
     } catch (e) {}
     _isLoading = false;
@@ -130,7 +130,7 @@ class DatabaseService extends ChangeNotifier {
       final response = await http.get(Uri.parse('$baseUrl/customers'), headers: auth.getAuthHeaders());
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body)['data'];
-        _customers = data.map((json) => CustomerModel.fromJson(json)).toList();
+        _customers = data.map((item) => CustomerModel.fromJson(item)).toList();
         notifyListeners();
       }
     } catch (e) {}
@@ -213,27 +213,62 @@ class DatabaseService extends ChangeNotifier {
       final response = await http.get(Uri.parse('$baseUrl/auth/staff'), headers: auth.getAuthHeaders());
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body)['data'];
-        _staff = data.map((json) => UserModel.fromJson(json)).toList();
+        
+        _staff = data
+            .where((item) => (item['isActive'] ?? true) == true)
+            .map((item) => UserModel.fromJson(item))
+            .toList();
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Fetch Staff Error: $e');
+    }
     _isLoading = false;
     notifyListeners();
   }
 
   Future<bool> addStaff(Map<String, dynamic> staffData, AuthService auth) async {
+    _lastError = null;
     try {
-      final response = await http.post(Uri.parse('$baseUrl/auth/register'), headers: auth.getAuthHeaders(), body: json.encode(staffData));
-      if (response.statusCode == 201) { await fetchStaff(auth); return true; }
-      return false;
-    } catch (e) { return false; }
+      if (!staffData.containsKey('phone')) {
+        staffData['phone'] = "";
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/register'), 
+        headers: auth.getAuthHeaders(), 
+        body: json.encode(staffData)
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) { 
+        await fetchStaff(auth); 
+        return true; 
+      } else {
+        final responseData = json.decode(response.body);
+        _lastError = responseData['message'] ?? 'Failed to add staff';
+        return false;
+      }
+    } catch (e) { 
+      _lastError = "Connection Error";
+      return false; 
+    }
   }
 
   Future<bool> deleteStaff(String staffId, AuthService auth) async {
     try {
-      final response = await http.delete(Uri.parse('$baseUrl/auth/staff/$staffId'), headers: auth.getAuthHeaders());
-      if (response.statusCode == 200) { _staff.removeWhere((s) => s.id == staffId); notifyListeners(); return true; }
+      final response = await http.delete(
+        Uri.parse('$baseUrl/auth/staff/$staffId'), 
+        headers: auth.getAuthHeaders()
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) { 
+        _staff.removeWhere((s) => s.id == staffId); 
+        notifyListeners(); 
+        return true; 
+      }
       return false;
-    } catch (e) { return false; }
+    } catch (e) { 
+      return false; 
+    }
   }
 
   Future<bool> addStock(Map<String, dynamic> data, AuthService auth) async {

@@ -223,51 +223,62 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   Widget _buildBottomCheckout(DatabaseService db, AuthService auth) {
-    return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30)), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15)]),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (cartItems.isNotEmpty) _buildCartPreview(),
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Total Payable', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                    Text('₹${grandTotal.toStringAsFixed(2)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
-                  ],
-                ),
-                if (balanceAmount > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)), 
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15)]
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (cartItems.isNotEmpty) _buildCartPreview(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 10.0),
+              child: Column(
+                children: [
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Remaining (Udhari)', style: TextStyle(color: Colors.red, fontSize: 12)),
-                      Text('₹${balanceAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red)),
+                      Text('Total Payable', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                      Text('₹${grandTotal.toStringAsFixed(2)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
                     ],
                   ),
-                ),
-                SizedBox(height: 15),
-                _buildPaymentOptions(),
-                SizedBox(height: 15),
-                _buildReceivedAmountAndDate(),
-                SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity, height: 55,
-                  child: ElevatedButton(
-                    onPressed: cartItems.isEmpty ? null : () => _handlePlaceOrder(db, auth),
-                    style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF2E7D32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), elevation: 0),
-                    child: Text('Confirm Order', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  if (balanceAmount > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Remaining (Udhari)', style: TextStyle(color: Colors.red, fontSize: 12)),
+                        Text('₹${balanceAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  SizedBox(height: 15),
+                  _buildPaymentOptions(),
+                  SizedBox(height: 15),
+                  _buildReceivedAmountAndDate(),
+                  SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity, height: 55,
+                    child: ElevatedButton(
+                      onPressed: cartItems.isEmpty ? null : () => _handlePlaceOrder(db, auth),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF2E7D32), 
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), 
+                        elevation: 0
+                      ),
+                      child: Text('Confirm Order', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  SizedBox(height: 10), // Bottom spacing for navigation buttons
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -357,7 +368,7 @@ class _BillingScreenState extends State<BillingScreen> {
             child: OutlinedButton.icon(
               onPressed: _selectNextPaymentDate,
               icon: Icon(Icons.calendar_month, size: 18),
-              label: Text(nextPaymentDate == null ? 'SET DATE' : DateFormat('dd MMM').format(nextPaymentDate!)),
+              label: Text(nextPaymentDate == null ? 'SET DATE' : DateFormat(DateFormat.YEAR_ABBR_MONTH_DAY).format(nextPaymentDate!)),
               style: OutlinedButton.styleFrom(foregroundColor: nextPaymentDate != null ? Colors.green : Colors.orange, side: BorderSide(color: nextPaymentDate != null ? Colors.green : Colors.orange), padding: EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             ),
           ),

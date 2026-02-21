@@ -224,15 +224,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Container(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
+      builder: (context) => SafeArea(
+        child: Container(
+          padding: EdgeInsets.fromLTRB(20, 24, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
                 children: [
                   CircleAvatar(radius: 25, backgroundColor: Color(0xFFE64A19), child: Text(auth.currentUser?.name[0] ?? 'A', style: TextStyle(color: Colors.white, fontSize: 20))),
                   SizedBox(width: 16),
@@ -249,28 +249,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
-            ),
-            Divider(height: 32),
-            ListTile(
-              leading: Icon(Icons.edit_outlined, color: Colors.blue),
-              title: Text('Edit Profile'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileScreen())); },
-            ),
-            if (isAdmin) ListTile(
-              leading: Icon(Icons.people_outline, color: Colors.teal),
-              title: Text('Manage Staff'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => StaffScreen())); },
-            ),
-            ListTile(
-              leading: Icon(Icons.logout, color: Colors.red),
-              title: Text('Logout', style: TextStyle(color: Colors.red)),
-              onTap: () async {
-                Navigator.pop(context);
-                await auth.logout();
-                Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-              },
-            ),
-          ],
+              Divider(height: 32),
+              ListTile(
+                leading: Icon(Icons.edit_outlined, color: Colors.blue),
+                title: Text('Edit Profile'),
+                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileScreen())); },
+              ),
+              if (isAdmin) ListTile(
+                leading: Icon(Icons.people_outline, color: Colors.teal),
+                title: Text('Manage Staff'),
+                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => StaffScreen())); },
+              ),
+              ListTile(
+                leading: Icon(Icons.logout, color: Colors.red),
+                title: Text('Logout', style: TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await auth.logout();
+                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                },
+              ),
+              SizedBox(height: 8), // Extra space for better visibility
+            ],
+          ),
         ),
       ),
     );
