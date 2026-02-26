@@ -87,14 +87,28 @@ class _BillingScreenState extends State<BillingScreen> {
               Expanded(
                 child: TextField(
                   controller: _customerSearchController,
-                  onChanged: (val) => setState(() => _showCustomerResults = val.isNotEmpty),
+                  onChanged: (val) {
+                    setState(() {
+                      _showCustomerResults = val.isNotEmpty;
+                      if (val.isEmpty) selectedCustomer = null;
+                    });
+                  },
                   style: TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    hintText: 'Search Customer...',
+                    hintText: selectedCustomer == null ? 'Walk-in Customer' : 'Selected: ${selectedCustomer!.name}',
                     hintStyle: TextStyle(color: Colors.white70),
                     prefixIcon: Icon(Icons.person_search, color: Colors.white70),
+                    suffixIcon: selectedCustomer != null 
+                      ? IconButton(
+                          icon: Icon(Icons.clear, color: Colors.white70),
+                          onPressed: () => setState(() {
+                            selectedCustomer = null;
+                            _customerSearchController.clear();
+                          }),
+                        )
+                      : null,
                     filled: true,
-                    fillColor: Colors.white.withOpacity(0.2),
+                    fillColor: Colors.white.withValues(alpha: 0.2),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -102,7 +116,7 @@ class _BillingScreenState extends State<BillingScreen> {
               ),
               SizedBox(width: 10),
               CircleAvatar(
-                backgroundColor: Colors.white.withOpacity(0.2),
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
                 child: IconButton(
                   icon: Icon(Icons.person_add, color: Colors.white),
                   onPressed: () => _showAddCustomerDialog(context, auth, db),
@@ -123,7 +137,7 @@ class _BillingScreenState extends State<BillingScreen> {
               hintStyle: TextStyle(color: Colors.white70),
               prefixIcon: Icon(Icons.shopping_bag, color: Colors.white70),
               filled: true,
-              fillColor: Colors.white.withOpacity(0.2),
+              fillColor: Colors.white.withValues(alpha: 0.2),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
               contentPadding: EdgeInsets.zero,
             ),
@@ -155,7 +169,14 @@ class _BillingScreenState extends State<BillingScreen> {
                 final newCustomer = CustomerModel(id: '', name: nameController.text, phone: phoneController.text, createdAt: DateTime.now());
                 bool success = await db.addCustomer(newCustomer, auth);
                 if (success) {
-                  setState(() { selectedCustomer = newCustomer; _customerSearchController.text = newCustomer.name; });
+                  // After adding, find the added customer in the list to get its ID
+                  await db.fetchCustomers(auth);
+                  final added = db.customers.firstWhere((c) => c.phone == phoneController.text);
+                  setState(() { 
+                    selectedCustomer = added; 
+                    _customerSearchController.text = added.name; 
+                    _showCustomerResults = false;
+                  });
                   Navigator.pop(context);
                 }
               }
@@ -207,7 +228,7 @@ class _BillingScreenState extends State<BillingScreen> {
         return InkWell(
           onTap: () => _addToCart(product),
           child: Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 5)]),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -273,7 +294,7 @@ class _BillingScreenState extends State<BillingScreen> {
                       child: Text('Confirm Order', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  SizedBox(height: 10), // Bottom spacing for navigation buttons
+                  SizedBox(height: 10), 
                 ],
               ),
             ),
@@ -368,7 +389,7 @@ class _BillingScreenState extends State<BillingScreen> {
             child: OutlinedButton.icon(
               onPressed: _selectNextPaymentDate,
               icon: Icon(Icons.calendar_month, size: 18),
-              label: Text(nextPaymentDate == null ? 'SET DATE' : DateFormat(DateFormat.YEAR_ABBR_MONTH_DAY).format(nextPaymentDate!)),
+              label: Text(nextPaymentDate == null ? 'SET DATE' : DateFormat('dd MMM').format(nextPaymentDate!)),
               style: OutlinedButton.styleFrom(foregroundColor: nextPaymentDate != null ? Colors.green : Colors.orange, side: BorderSide(color: nextPaymentDate != null ? Colors.green : Colors.orange), padding: EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             ),
           ),
@@ -395,8 +416,15 @@ class _BillingScreenState extends State<BillingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please add items to cart'), backgroundColor: Colors.red));
       return;
     }
+    
+    // Logic: If there is a remaining balance, a customer MUST be selected.
     if (balanceAmount > 0 && selectedCustomer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select a customer for Credit order'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('(Customer required for Credit)'),
+          backgroundColor: Colors.red
+        )
+      );
       return;
     }
 
@@ -413,11 +441,27 @@ class _BillingScreenState extends State<BillingScreen> {
     );
 
     if (confirm == true) {
-      final orderData = {"customerId": selectedCustomer?.id, "items": cartItems.map((item) => {"productId": int.parse(item['productId']), "quantity": item['quantity']}).toList(), "paymentMethod": paymentMethod, "amountPaid": amountReceived, "totalAmount": grandTotal, "nextPaymentDate": nextPaymentDate?.toIso8601String()};
+      // If selectedCustomer is null, backend will receive null customerId (handled as Walk-in)
+      final orderData = {
+        "customerId": selectedCustomer?.id, 
+        "items": cartItems.map((item) => {"productId": int.parse(item['productId']), "quantity": item['quantity']}).toList(), 
+        "paymentMethod": paymentMethod, 
+        "amountPaid": amountReceived, 
+        "totalAmount": grandTotal, 
+        "nextPaymentDate": nextPaymentDate?.toIso8601String()
+      };
+      
       bool success = await db.createSale(orderData, auth);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bill Generated!'), backgroundColor: Colors.green));
-        setState(() { cartItems.clear(); selectedCustomer = null; _customerSearchController.clear(); _amountReceivedController.clear(); nextPaymentDate = null; });
+        setState(() { 
+          cartItems.clear(); 
+          selectedCustomer = null; 
+          _customerSearchController.clear(); 
+          _amountReceivedController.clear(); 
+          amountReceived = 0.0;
+          nextPaymentDate = null; 
+        });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating bill'), backgroundColor: Colors.red));
       }

@@ -132,15 +132,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
-        SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            'Stock Value',
-            '₹${db.totalStockValue.toStringAsFixed(0)}',
-            Icons.inventory_2,
-            Color(0xFF2196F3),
-          ),
-        ),
       ],
     );
   }
@@ -269,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
                 },
               ),
-              SizedBox(height: 8), // Extra space for better visibility
+              SizedBox(height: 8),
             ],
           ),
         ),

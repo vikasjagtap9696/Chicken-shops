@@ -12,8 +12,10 @@ class OrderListScreen extends StatefulWidget {
 }
 
 class _OrderListScreenState extends State<OrderListScreen> {
-  String _selectedFilter = 'All'; // All, Cash, Online, Credit
-  DateTime? _selectedDate;
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedFilter = 'All'; // All, Cash, Online, Udhari
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -25,22 +27,59 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final db = Provider.of<DatabaseService>(context);
     final auth = Provider.of<AuthService>(context);
 
     // Apply Filters locally
     List<SaleModel> filteredOrders = db.sales.where((order) {
-      bool matchesPayment = _selectedFilter == 'All' || 
-          order.paymentMode.toLowerCase() == _selectedFilter.toLowerCase();
+      // Search Filter
+      final query = _searchController.text.toLowerCase();
+      bool matchesSearch = (order.customerName?.toLowerCase().contains(query) ?? false) || 
+                           order.billNumber.toLowerCase().contains(query);
       
-      bool matchesDate = _selectedDate == null || 
-          (order.createdAt.year == _selectedDate!.year &&
-           order.createdAt.month == _selectedDate!.month &&
-           order.createdAt.day == _selectedDate!.day);
+      if (!matchesSearch) return false;
+
+      // Payment Filter
+      bool matchesPayment = true;
+      if (_selectedFilter == 'Udhari') {
+        matchesPayment = order.hasBalance;
+      } else if (_selectedFilter != 'All') {
+        matchesPayment = order.paymentMode.toLowerCase() == _selectedFilter.toLowerCase();
+      }
+      
+      if (!matchesPayment) return false;
+
+      // Date Filter
+      bool matchesDate = true;
+      if (_startDate != null && _endDate != null) {
+        final start = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+        final end = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+        matchesDate = order.createdAt.isAfter(start) && order.createdAt.isBefore(end);
+      } else if (_startDate != null) {
+        matchesDate = order.createdAt.year == _startDate!.year &&
+                      order.createdAt.month == _startDate!.month &&
+                      order.createdAt.day == _startDate!.day;
+      }
            
-      return matchesPayment && matchesDate;
+      return matchesDate;
     }).toList();
+
+    // Calculate Totals for Footer
+    double totalUdhariAmount = 0;
+    int pendingOrdersCount = 0; // Changed to count entries instead of unique persons for better accuracy
+    for (var order in filteredOrders) {
+      if (order.hasBalance) {
+        totalUdhariAmount += order.balanceAmount;
+        pendingOrdersCount++;
+      }
+    }
 
     return Scaffold(
       backgroundColor: Color(0xFFF5F5F5),
@@ -51,15 +90,18 @@ class _OrderListScreenState extends State<OrderListScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: Icon(Icons.calendar_today, size: 20),
-            onPressed: () => _pickDate(context),
+            icon: Icon(Icons.date_range, size: 20),
+            onPressed: () => _pickDateRange(context),
+            tooltip: 'Select Date Range',
           ),
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: () {
               setState(() {
                 _selectedFilter = 'All';
-                _selectedDate = null;
+                _startDate = null;
+                _endDate = null;
+                _searchController.clear();
               });
               db.fetchAllOrders(auth);
             },
@@ -68,38 +110,129 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ),
       body: Column(
         children: [
+          _buildSearchBar(),
           _buildFilterBar(),
-          if (_selectedDate != null)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Chip(
-                label: Text('Date: ${DateFormat('dd MMM yyyy').format(_selectedDate!)}'),
-                onDeleted: () => setState(() => _selectedDate = null),
-              ),
-            ),
+          if (_startDate != null) _buildDateIndicator(),
           Expanded(
             child: db.isLoading
                 ? Center(child: CircularProgressIndicator(color: Color(0xFFE64A19)))
                 : filteredOrders.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.receipt_long, size: 80, color: Colors.grey[400]),
-                            SizedBox(height: 16),
-                            Text('No matching orders found.', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
-                          ],
-                        ),
-                      )
+                    ? _buildEmptyState()
                     : ListView.builder(
                         padding: EdgeInsets.all(12),
                         itemCount: filteredOrders.length,
-                        itemBuilder: (context, index) {
-                          final sale = filteredOrders[index];
-                          return _buildOrderListItem(sale);
-                        },
+                        itemBuilder: (context, index) => _buildOrderListItem(filteredOrders[index]),
                       ),
           ),
+          if (filteredOrders.isNotEmpty) _buildFooter(pendingOrdersCount, totalUdhariAmount),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+      color: Color(0xFFE64A19),
+      child: TextField(
+        controller: _searchController,
+        style: TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Search Customer or Bill No...',
+          hintStyle: TextStyle(color: Colors.white70),
+          prefixIcon: Icon(Icons.search, color: Colors.white),
+          suffixIcon: _searchController.text.isNotEmpty 
+            ? IconButton(icon: Icon(Icons.clear, color: Colors.white), onPressed: () { _searchController.clear(); setState(() {}); })
+            : null,
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: 0.2),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          contentPadding: EdgeInsets.symmetric(vertical: 0),
+        ),
+        onChanged: (value) => setState(() {}),
+      ),
+    );
+  }
+
+  Widget _buildFooter(int orderCount, double amount) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Pending Orders', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                Text('$orderCount Entries', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+              ],
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('Total Pending Amount', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.red.shade700)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.event, size: 16, color: Colors.orange.shade900),
+                  SizedBox(width: 8),
+                  Text(
+                    _endDate == null 
+                      ? 'Date: ${DateFormat('dd MMM yyyy').format(_startDate!)}'
+                      : '${DateFormat('dd MMM').format(_startDate!)} - ${DateFormat('dd MMM yyyy').format(_endDate!)}',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                  ),
+                  Spacer(),
+                  InkWell(
+                    onTap: () => setState(() { _startDate = null; _endDate = null; }),
+                    child: Icon(Icons.close, size: 16, color: Colors.orange.shade900),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.receipt_long, size: 80, color: Colors.grey[400]),
+          SizedBox(height: 16),
+          Text('No matching orders found.', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
         ],
       ),
     );
@@ -116,7 +249,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
           _filterChip('All'),
           _filterChip('Cash'),
           _filterChip('Online'),
-          _filterChip('Credit'),
+          _filterChip('Udhari'),
         ],
       ),
     );
@@ -138,14 +271,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
-  Future<void> _pickDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+  Future<void> _pickDateRange(BuildContext context) async {
+    final DateTimeRange? picked = await showDateRangePicker(
       context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: DateTime.now().add(Duration(days: 1)),
+      initialDateRange: _startDate != null && _endDate != null 
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Color(0xFFE64A19),
+              onPrimary: Colors.white,
+              onSurface: Colors.black87,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+      });
+    }
   }
 
   Widget _buildOrderListItem(SaleModel sale) {
@@ -171,16 +324,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             SizedBox(height: 4),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                'Order ID: ${sale.billNumber}',
-                style: TextStyle(fontSize: 10, color: Colors.blue.shade800, fontWeight: FontWeight.bold),
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Order ID: ${sale.billNumber}',
+                    style: TextStyle(fontSize: 10, color: Colors.blue.shade800, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (sale.hasBalance) ...[
+                  SizedBox(width: 8),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'UDHARI: ₹${sale.balanceAmount.toStringAsFixed(0)}',
+                      style: TextStyle(fontSize: 10, color: Colors.red.shade800, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ]
+              ],
             ),
           ],
         ),
@@ -190,7 +361,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
           children: [
             Text(
               '₹${sale.grandTotal.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green.shade700),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold, 
+                fontSize: 18, 
+                color: sale.hasBalance ? Colors.orange.shade800 : Colors.green.shade700
+              ),
             ),
             Text(
               sale.paymentMode.toUpperCase(),
@@ -241,6 +416,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       Text('-₹${sale.discount.toStringAsFixed(2)}', style: TextStyle(color: Colors.red[400], fontSize: 12)),
                     ],
                   ),
+                Divider(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Amount Paid', style: TextStyle(color: Colors.blueGrey, fontSize: 13)),
+                    Text('₹${sale.amountPaid.toStringAsFixed(2)}', style: TextStyle(color: Colors.blueGrey, fontSize: 13, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                if (sale.hasBalance)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Remaining (Udhari)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('₹${sale.balanceAmount.toStringAsFixed(2)}', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
+                  ],
+                ),
                 Divider(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
 class AuthService extends ChangeNotifier {
-  static const String serverIp = '172.20.10.7'; // Central variable for IP
-  static const String baseUrl = 'http://$serverIp:5000/api';
+  // static const String serverIp = '192.168.1.10';
+  static const String baseUrl = 'https://api.cutpixels.com/api';
   
   UserModel? _currentUser;
   String? _token;
@@ -49,7 +49,7 @@ class AuthService extends ChangeNotifier {
           'email': trimmedEmail,
           'password': password,
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 15));
 
       final responseData = json.decode(response.body);
 
@@ -67,7 +67,7 @@ class AuthService extends ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _error = "Server connection failed: $e";
+      _error = "Server connection failed. Please check your internet or if the server is live.";
       _isLoading = false;
       notifyListeners();
       return false;

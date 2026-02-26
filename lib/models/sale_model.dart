@@ -1,14 +1,15 @@
 class SaleModel {
   final String id;
-  final String billNumber; // Backend: orderNumber
+  final String billNumber; 
   final String? customerName;
   final String? customerPhone;
   final List<SaleItem> items;
-  final double subtotal; // Backend: totalAmount
+  final double subtotal; 
   final double discount;
-  final double grandTotal; // Backend: netAmount
+  final double grandTotal; 
+  final double amountPaid; // Added to track balance
   final double profit;
-  final String paymentMode; // Backend: paymentMethod
+  final String paymentMode; 
   final String status;
   final DateTime createdAt;
 
@@ -21,16 +22,19 @@ class SaleModel {
     required this.subtotal,
     required this.discount,
     required this.grandTotal,
+    required this.amountPaid,
     required this.profit,
     required this.paymentMode,
     required this.status,
     required this.createdAt,
   });
 
+  double get balanceAmount => grandTotal - amountPaid;
+  bool get hasBalance => balanceAmount > 0.1; // Using 0.1 to avoid float precision issues
+
   factory SaleModel.fromJson(Map<String, dynamic> json) {
     return SaleModel(
       id: json['id']?.toString() ?? '',
-      // Backend madhun 'orderNumber' yeto mhanun to vaprava
       billNumber: json['orderNumber'] ?? '', 
       customerName: json['customer'] != null ? json['customer']['name'] : 'Walk-in',
       customerPhone: json['customer'] != null ? json['customer']['phone'] : '',
@@ -40,6 +44,7 @@ class SaleModel {
       subtotal: double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0.0,
       discount: double.tryParse(json['discount']?.toString() ?? '0') ?? 0.0,
       grandTotal: double.tryParse(json['netAmount']?.toString() ?? '0') ?? 0.0,
+      amountPaid: double.tryParse(json['amountPaid']?.toString() ?? json['netAmount']?.toString() ?? '0') ?? 0.0,
       profit: double.tryParse(json['profit']?.toString() ?? '0') ?? 0.0,
       paymentMode: json['paymentMethod'] ?? 'cash',
       status: json['status'] ?? 'completed',
@@ -52,8 +57,8 @@ class SaleItem {
   final String productId;
   final String productName;
   final double quantity;
-  final double price; // Backend: pricePerUnit
-  final double total; // Backend: totalPrice
+  final double price; 
+  final double total;
 
   SaleItem({
     required this.productId,

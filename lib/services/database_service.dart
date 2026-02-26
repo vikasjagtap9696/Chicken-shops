@@ -9,7 +9,7 @@ import 'auth_service.dart';
 
 class DatabaseService extends ChangeNotifier {
   // Updated with your current IP: 192.168.1.10
-  static const String baseUrl = 'http://192.168.1.10:5000/api';
+  static const String baseUrl = 'https://api.cutpixels.com/api';
   
   List<StockModel> _stocks = [];
   List<SaleModel> _sales = [];
